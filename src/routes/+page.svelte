@@ -1,6 +1,29 @@
 <script lang="ts">
-  import { Calendar, Plus, Trash2, Edit2, ChevronDown, ChevronRight, Download, Upload, Save } from 'lucide-svelte';
+  import { Calendar, Plus, Trash2, Edit2, ChevronDown, ChevronRight, Download, Upload, Save, Lock } from 'lucide-svelte';
   import { onMount } from 'svelte';
+
+  // ===== PASSWORD PROTECTION =====
+  const CORRECT_PASSWORD = 'AAscheduler2025'; // Change this to your desired password
+  let isAuthenticated = false;
+  let passwordInput = '';
+  let passwordError = false;
+
+  function checkPassword() {
+    if (passwordInput === CORRECT_PASSWORD) {
+      isAuthenticated = true;
+      passwordError = false;
+      sessionStorage.setItem('scheduler-auth', 'true');
+    } else {
+      passwordError = true;
+      passwordInput = '';
+    }
+  }
+
+  function logout() {
+    isAuthenticated = false;
+    sessionStorage.removeItem('scheduler-auth');
+    passwordInput = '';
+  }
 
   // ===== CONFIG =====
   const regularRate = 25;
@@ -9,7 +32,6 @@
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   // ===== PERIOD (2 weeks) =====
-  // Pick any start date; defaults to Dec 1, 2025.
   let startDate = new Date(2025, 11, 1);
 
   function fmtMD(d: Date) {
@@ -21,10 +43,9 @@
     return d;
   }
 
-  // Reactive 14-day window starting at startDate
   $: dates = Array.from({ length: 14 }, (_, i) => {
     const date = addDays(startDate, i);
-    const jsDay = date.getDay(); // 0=Sun
+    const jsDay = date.getDay();
     return {
       dayName: days[jsDay === 0 ? 6 : jsDay - 1],
       date: fmtMD(date),
@@ -51,8 +72,7 @@
   let saveStatus = '';
   let fileInput: HTMLInputElement;
 
-  // Auto-save to localStorage whenever data changes
-  $: if (typeof window !== 'undefined') {
+  $: if (typeof window !== 'undefined' && isAuthenticated) {
     saveToLocalStorage();
   }
 
@@ -135,7 +155,6 @@
       try {
         const data = JSON.parse(e.target?.result as string);
         
-        // Validate the data structure
         if (!data.staff || !data.schedules) {
           throw new Error('Invalid file format');
         }
@@ -144,14 +163,12 @@
         schedules = data.schedules;
         startDate = data.startDate ? new Date(data.startDate) : new Date(2025, 11, 1);
         
-        // Reset UI state
         editingOpen = {};
         collapsedSchedules = {};
         
         saveStatus = 'Imported successfully';
         setTimeout(() => saveStatus = '', 3000);
         
-        // Save to localStorage after import
         saveToLocalStorage();
       } catch (error) {
         console.error('Failed to import:', error);
@@ -161,7 +178,6 @@
     };
     reader.readAsText(file);
     
-    // Reset the input so the same file can be imported again
     input.value = '';
   }
 
@@ -169,7 +185,6 @@
     if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
       localStorage.removeItem(STORAGE_KEY);
       
-      // Reset to initial state
       staff = [
         { id: 1, name: 'MOODY' }, { id: 2, name: 'SHAWELL' }, { id: 3, name: 'MILLER' },
         { id: 4, name: 'NGUYEN' }, { id: 5, name: 'JACKSON' }, { id: 6, name: 'MACRINA' },
@@ -223,20 +238,24 @@
     }
   }
 
-  // Load data on mount
   onMount(() => {
-    const loaded = loadFromLocalStorage();
-    if (!loaded) {
-      // Initialize schedules if nothing was loaded
-      ensureAllSchedulesAssigned();
+    if (sessionStorage.getItem('scheduler-auth') === 'true') {
+      isAuthenticated = true;
+    }
+    
+    if (isAuthenticated) {
+      const loaded = loadFromLocalStorage();
+      if (!loaded) {
+        ensureAllSchedulesAssigned();
+      }
     }
   });
 
   // ===== ASSIGNMENT HELPERS =====
   const DAYS_OFF_CYCLE = [
-    [6,0], // Sun-Mon
-    [1,2], // Tue-Wed
-    [4,5], // Fri-Sat
+    [6,0],
+    [1,2],
+    [4,5],
   ];
 
   function buildAssignments12h_A_B(staffList) {
@@ -318,13 +337,11 @@
   let newStaffName = '';
   let newScheduleName = '';
 
-  // === per-schedule editing (Assign/Done) ===
   let editingOpen: Record<number, boolean> = {};
   function toggleEditing(id: number) {
     editingOpen = { ...editingOpen, [id]: !editingOpen[id] };
   }
 
-  // === per-schedule collapse state ===
   let collapsedSchedules: Record<number, boolean> = {};
   function toggleCollapse(id: number) {
     collapsedSchedules = { ...collapsedSchedules, [id]: !collapsedSchedules[id] };
@@ -437,7 +454,7 @@
     });
   }
 
-  // ===== SIMULATED STAFF (PER-SCHEDULE) =====
+  // ===== SIMULATED STAFF =====
   function nextSimId(schedule) {
     return (schedule.simCounter || 0) + 1;
   }
@@ -452,8 +469,8 @@
       };
       const sim =
         s.type === '12-hour'
-          ? { ...base, team: kind } // A/B
-          : { ...base, shift: kind, daysOff: [6,0] }; // AM/PM
+          ? { ...base, team: kind }
+          : { ...base, shift: kind, daysOff: [6,0] };
       const displayOrder = [...(s.displayOrder || []), sim.id];
       return {
         ...s,
@@ -497,7 +514,6 @@
     });
   }
 
-  // Toggle a specific day for REAL staff
   function toggleScheduleDay(scheduleId: number, staffId: number, dayIndex: number) {
     schedules = schedules.map(sch => {
       if (sch.id !== scheduleId) return sch;
@@ -527,7 +543,6 @@
     });
   }
 
-  // Toggle a specific day for SIM staff
   function toggleScheduleDayForSim(scheduleId: number, simId: string, dayIndex: number) {
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
@@ -567,12 +582,11 @@
 
     if (schedule.type === '12-hour') {
       if (schedule.rotation === '4-3') {
-        // Team B: Sun/Mon/Tue, Team A: Wed/Thu/Fri, Saturday alternates
         return dates.map((item, i) => {
           const d = item.fullDate;
-          const jsDay = d.getDay();                // 0=Sun ... 6=Sat
-          const weekIndex = Math.floor(i / 7);     // 0 or 1
-          const saturdayGoesToA = (weekIndex % 2 === 0); // Week1->A, Week2->B
+          const jsDay = d.getDay();
+          const weekIndex = Math.floor(i / 7);
+          const saturdayGoesToA = (weekIndex % 2 === 0);
           if (assignment.team === 'A') {
             return (jsDay === 3 || jsDay === 4 || jsDay === 5 || (jsDay === 6 && saturdayGoesToA)) ? 1 : 0;
           } else if (assignment.team === 'B') {
@@ -590,10 +604,9 @@
       return Array(14).fill(0);
     }
 
-    // 10-hour schedules: off if day index is in daysOff
     return dates.map((item) => {
       const d = item.fullDate;
-      const jsDay = d.getDay(); // 0=Sun
+      const jsDay = d.getDay();
       const dayOfWeek = jsDay === 0 ? 6 : jsDay - 1;
       return (assignment.daysOff || []).includes(dayOfWeek) ? 0 : 1;
     });
@@ -619,7 +632,6 @@
 
     const hoursPerShift = schedule.type === '12-hour' ? 12 : 10;
 
-    // Real staff
     for (const s of staff) {
       const scheduleData = generateSchedule(schedule, s.id);
       const a = schedule.assignments[s.id] || {};
@@ -663,7 +675,6 @@
       });
     }
 
-    // Sim staff
     for (const sim of schedule.simStaff || []) {
       const sched = sim.manualSchedule ? sim.manualSchedule : generateScheduleForAssignment(schedule, sim);
       const simHours = sched.reduce((sum, d) => sum + d * hoursPerShift, 0);
@@ -706,7 +717,6 @@
       });
     }
 
-    // Merge and order by per-schedule displayOrder
     const mapById = new Map<string | number, any>();
     [...rowsReal, ...rowsSim].forEach(row => mapById.set(row.id, row));
     const ordered: any[] = [];
@@ -718,7 +728,6 @@
     }
     for (const leftover of mapById.values()) ordered.push(leftover);
 
-    // Gap OT
     let gapOTHours = 0;
     if (schedule.type === '12-hour') {
       dailyCoverage.forEach(c => {
@@ -743,7 +752,6 @@
     };
   }
 
-  // ===== COST ANALYSIS CALCULATIONS =====
   $: allScheduleCosts = schedules.map(s => calculateScheduleCosts(s));
   
   $: costAnalysis = {
@@ -755,7 +763,6 @@
     })
   };
 
-  // ===== DRAG (used both in Assign list and reorder) =====
   let dragItem: { scheduleId: number; id: string | number } | null = null;
 
   function reorderList(scheduleId: number, fromId: string | number, toId: string | number) {
@@ -789,7 +796,6 @@
     dragItem = null;
   }
 
-  // ===== PERIOD CONTROLS =====
   function shiftPeriod(days: number) {
     startDate = addDays(startDate, days);
   }
@@ -811,11 +817,55 @@
 
 <style>
   :root {
-    /* If you have a global sticky navbar, set this to its height, e.g. 64px */
     --sticky-top: 0px;
   }
 </style>
 
+{#if !isAuthenticated}
+<div class="min-h-screen bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center p-6">
+  <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-4">
+        <Lock class="w-10 h-10 text-blue-600" aria-hidden="true" />
+      </div>
+      <h1 class="text-3xl font-bold text-slate-800 mb-2">Scheduler Login</h1>
+      <p class="text-slate-600">Enter password to access the scheduler</p>
+    </div>
+    
+    <form on:submit|preventDefault={checkPassword} class="space-y-4">
+      <div>
+        <label for="password" class="block text-sm font-medium text-slate-700 mb-2">
+          Password
+        </label>
+        <input
+          id="password"
+          type="password"
+          bind:value={passwordInput}
+          class="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+          placeholder="Enter password"
+          autocomplete="current-password"
+        />
+        {#if passwordError}
+          <p class="mt-2 text-sm text-red-600">Incorrect password. Please try again.</p>
+        {/if}
+      </div>
+      
+      <button
+        type="submit"
+        class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg"
+      >
+        Login
+      </button>
+    </form>
+    
+    <div class="mt-6 p-4 bg-slate-50 rounded-lg">
+      <p class="text-xs text-slate-600 text-center">
+        🔒 Sessions expire when you close your browser
+      </p>
+    </div>
+  </div>
+</div>
+{:else}
 <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
   <div class="max-w-7xl mx-auto">
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -828,9 +878,17 @@
           <p class="text-slate-600">Compare Different Schedule Configurations</p>
         </div>
         
-        <!-- Save/Load Controls -->
         <div class="flex flex-col gap-2 items-end">
           <div class="flex gap-2">
+            <button
+              on:click={logout}
+              class="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 flex items-center gap-2 font-medium text-sm"
+              title="Logout"
+            >
+              <Lock class="w-4 h-4" aria-hidden="true" />
+              Logout
+            </button>
+            
             <button
               on:click={exportToJSON}
               class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 font-medium text-sm"
@@ -888,7 +946,6 @@
         <span>Gap OT Rate: <strong>${overtimeRate}/hr</strong></span>
       </div>
 
-      <!-- Period controls (not sticky, simple + intuitive) -->
       <div class="mt-4 flex flex-wrap items-center gap-2">
         <label class="text-sm text-slate-700">2-Week Start:</label>
         <input
@@ -902,7 +959,6 @@
         <button class="px-3 py-2 bg-slate-100 rounded border border-slate-300" on:click={()=>shiftPeriod(+14)} aria-label="Next two weeks">+14d</button>
       </div>
       
-      <!-- Auto-save Info Banner -->
       <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <div class="flex items-start gap-2 text-sm text-blue-800">
           <Save class="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />
@@ -914,7 +970,6 @@
       </div>
     </div>
 
-    <!-- Cost Analysis Summary -->
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
       <h2 class="text-xl font-bold text-slate-800 mb-4">Cost Analysis Overview</h2>
       <div class="overflow-x-auto">
@@ -947,7 +1002,6 @@
       </div>
     </div>
 
-    <!-- Staff Management -->
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
       <div class="flex items-center justify-between mb-4 gap-2">
         <h2 class="text-xl font-bold text-slate-800">Staff Roster</h2>
@@ -992,7 +1046,6 @@
       </div>
     </div>
 
-    <!-- Schedule Configs -->
     <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
       <h2 class="text-xl font-bold text-slate-800 mb-4">Schedule Configurations</h2>
 
@@ -1062,7 +1115,6 @@
       </div>
     </div>
 
-    <!-- Per-schedule views -->
     {#each schedules as schedule (schedule.id + '-' + (schedule.lastEdited || 0) + '-' + startDate.getTime())}
       {@const costs = calculateScheduleCosts(schedule)}
       {@const minCoverage = schedule.type === '12-hour'
@@ -1136,7 +1188,6 @@
             <div id={`assign-panel-${schedule.id}`} class="mb-4 p-4 bg-slate-50 rounded-lg" tabindex="-1">
               <h3 class="font-bold mb-3">Assign & Order (drag to reorder)</h3>
 
-              <!-- Add SIM buttons -->
               <div class="mb-3 flex gap-2">
                 {#if schedule.type === '12-hour'}
                   <button class="px-3 py-1 bg-amber-600 text-white rounded" on:click={()=> addSimStaff(schedule.id, 'A')}>+ [SIM] Team A</button>
@@ -1147,7 +1198,6 @@
                 {/if}
               </div>
 
-              <!-- Single integrated list (real + sim) that you can drag AND edit -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {#each schedule.displayOrder as rowId, idx (rowId)}
                   {@const isSim = String(rowId).startsWith('sim-')}
@@ -1186,7 +1236,6 @@
                       </div>
 
                       {#if schedule.type === '12-hour'}
-                        <!-- Team selector -->
                         <div class="flex items-center gap-2">
                           <label class="text-sm" for={`team-${schedule.id}-${rowId}`}>Team:</label>
                           <select
@@ -1204,7 +1253,6 @@
                           </select>
                         </div>
                       {:else}
-                        <!-- Shift + Days off -->
                         <div class="flex items-center gap-2 mb-2">
                           <label class="text-sm" for={`shift-${schedule.id}-${rowId}`}>Shift:</label>
                           <select
@@ -1250,7 +1298,6 @@
             </div>
           {/if}
 
-          <!-- Tip + Reset -->
           <div class="mb-3 flex items-center justify-between">
             <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg flex-1 mr-2">
               <div class="flex items-center gap-2 text-sm text-blue-800">
@@ -1266,9 +1313,7 @@
             </button>
           </div>
 
-          <!-- Grid -->
           <div class="overflow-x-auto">
-            <!-- IMPORTANT: border-separate + border-spacing-0 makes sticky headers reliable -->
             <table class="w-full border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
@@ -1290,11 +1335,9 @@
                     ? '8:30a-8:30p'
                     : (detail.shift === 'AM' ? '7a-5p' : '1p-11p')}
                   <tr class={`hover:bg-slate-50 ${detail.simulated ? 'bg-amber-50' : ''}`}>
-                    <!-- Row number -->
                     <td class="border border-slate-300 px-3 py-2 font-medium sticky left-0 bg-white w-14 text-right text-slate-500 z-20">
                       {idx + 1}.
                     </td>
-                    <!-- Name -->
                     <td class="border border-slate-300 px-3 py-2 font-medium sticky left-[3.5rem] bg-white z-20">
                       {detail.name}
                       {#if detail.simulated}
@@ -1345,7 +1388,7 @@
                       ${detail.cost.toLocaleString()}
                       {#if detail.overtimeHours > 0}
                         <div class="text-xs text-slate-600">
-                          (${(detail.regularHours * regularRate).toLocaleString()} + {(detail.overtimeHours * overtimeRate).toLocaleString()})
+                          (${(detail.regularHours * regularRate).toLocaleString()} + ${(detail.overtimeHours * overtimeRate).toLocaleString()})
                         </div>
                       {/if}
                     </td>
@@ -1403,3 +1446,4 @@
     {/each}
   </div>
 </div>
+{/if}
