@@ -2,8 +2,7 @@
   import { Calendar, Download, Upload, Save, Lock, Trash2 } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
 
-  export let regularRate: number;
-  export let overtimeRate: number;
+  export let staffPositions: any[];
   export let startDate: Date;
   export let saveStatus: string;
   export let lastSaved: Date | null;
@@ -75,11 +74,18 @@
   </div>
   
   <div class="mt-2 text-sm text-slate-600 flex gap-4 flex-wrap">
-    <span>Regular Rate: <strong>${regularRate}/hr</strong></span>
-    <span aria-hidden="true">•</span>
-    <span>Overtime Rate: <strong>${overtimeRate}/hr (1.5x)</strong> after 80 hours/2 weeks</span>
-    <span aria-hidden="true">•</span>
-    <span>Gap OT Rate: <strong>${overtimeRate}/hr</strong></span>
+    {#each staffPositions as position, idx}
+      <span>
+        <span 
+          class="inline-block w-3 h-3 rounded-full mr-1"
+          style="background-color: {position.color}"
+        ></span>
+        <strong>{position.name}:</strong> ${position.rate}/hr (OT: ${position.overtimeRate}/hr)
+      </span>
+      {#if idx < staffPositions.length - 1}
+        <span aria-hidden="true">•</span>
+      {/if}
+    {/each}
   </div>
 
   <div class="mt-4 flex flex-wrap items-center gap-2">

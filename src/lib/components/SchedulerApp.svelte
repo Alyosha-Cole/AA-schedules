@@ -2,27 +2,26 @@
   import { createEventDispatcher } from 'svelte';
   import SchedulerHeader from './SchedulerHeader.svelte';
   import CostOverview from './CostOverview.svelte';
-  import StaffRoster from './StaffRoster.svelte';
+  import StaffConfigs from './StaffConfigs.svelte';
+  import PositionRoster from './PositionRoster.svelte';
   import ScheduleConfigs from './ScheduleConfigs.svelte';
   import ScheduleDetail from './ScheduleDetail.svelte';
 
-  export let regularRate: number;
-  export let overtimeRate: number;
-  export let requiredStaff: number;
   export let startDate: Date;
   export let saveStatus: string;
   export let lastSaved: Date | null;
-  export let staff: any[];
+  export let staffPositions: any[];
   export let schedules: any[];
   export let dates: any[];
   export let days: string[];
   export let costAnalysis: any;
   export let editingOpen: Record<number, boolean>;
   export let collapsedSchedules: Record<number, boolean>;
-  export let newStaffName: string;
+  export let newPositionName: string;
+  export let newStaffNames: Record<number, string>;
   export let newScheduleName: string;
   export let fileInput: HTMLInputElement;
-  export let generateSchedule: (schedule: any, staffId: number) => number[];
+  export let generateSchedule: (schedule: any, positionId: number, staffId: number) => number[];
   export let generateScheduleForAssignment: (schedule: any, assignment: any) => number[];
   export let calculateScheduleCosts: (schedule: any) => any;
   export let getDaysOffPattern: (daysOff: number[]) => string;
@@ -40,8 +39,7 @@
 <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
   <div class="max-w-7xl mx-auto">
     <SchedulerHeader
-      {regularRate}
-      {overtimeRate}
+      {staffPositions}
       {startDate}
       {saveStatus}
       {lastSaved}
@@ -59,13 +57,23 @@
       {costAnalysis}
     />
 
-    <StaffRoster
-      {staff}
-      bind:newStaffName
-      on:addStaff
-      on:deleteStaff
-      on:updateStaffName
+    <StaffConfigs
+      {staffPositions}
+      bind:newPositionName
+      on:addPosition
+      on:deletePosition
+      on:updatePosition
     />
+
+    {#each staffPositions as position (position.id)}
+      <PositionRoster
+        {position}
+        bind:newStaffName={newStaffNames[position.id]}
+        on:addStaff={() => dispatch('addStaffToPosition', position.id)}
+        on:deleteStaff
+        on:updateStaff
+      />
+    {/each}
 
     <ScheduleConfigs
       {schedules}
@@ -80,12 +88,9 @@
     {#each schedules as schedule (schedule.id + '-' + (schedule.lastEdited || 0) + '-' + startDate.getTime())}
       <ScheduleDetail
         {schedule}
-        {staff}
+        {staffPositions}
         {dates}
         {days}
-        {requiredStaff}
-        {regularRate}
-        {overtimeRate}
         isEditing={editingOpen[schedule.id]}
         isCollapsed={collapsedSchedules[schedule.id]}
         {generateSchedule}
@@ -98,15 +103,14 @@
         on:deleteSimStaff
         on:updateSimStaff
         on:updateAssignment
-        on:toggleDayOff
-        on:toggleSimDayOff
         on:toggleScheduleDay
         on:toggleScheduleDayForSim
         on:resetManualEdits
         on:reorderList
-        on:moveStaff
         on:updateDaysOffPattern
         on:updateSimDaysOffPattern
+        on:updateRequiredCount
+        on:updateSchedule
       />
     {/each}
 

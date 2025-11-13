@@ -27,9 +27,6 @@
   }
 
   // ===== CONFIG =====
-  const regularRate = 25;
-  const overtimeRate = 37.5;
-  const requiredStaff = 10;
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   // ===== PERIOD (2 weeks) =====
@@ -55,17 +52,42 @@
     };
   });
 
-  // ===== INITIAL STATE =====
-  let staff = [
-    { id: 1, name: 'MOODY' }, { id: 2, name: 'SHAWELL' }, { id: 3, name: 'MILLER' },
-    { id: 4, name: 'NGUYEN' }, { id: 5, name: 'JACKSON' }, { id: 6, name: 'MACRINA' },
-    { id: 7, name: 'GARNER' }, { id: 8, name: 'DOUGLAS' }, { id: 9, name: 'MORALES' },
-    { id: 10, name: 'ANDERSON' }, { id: 11, name: 'CLARK' }, { id: 12, name: 'ALLEN' },
-    { id: 13, name: 'BROWN' }, { id: 14, name: 'HOLMES' }, { id: 15, name: 'FOLGEMAN' },
-    { id: 16, name: 'HOLLAND' }, { id: 17, name: 'SANTANA' }, { id: 18, name: 'BRIDGES' },
-    { id: 19, name: 'TRYTHALL' }, { id: 20, name: 'GILBERT' }, { id: 21, name: 'FLOWERS' },
-    { id: 22, name: 'HYDEN' }, { id: 23, name: 'NORMAN' }, { id: 24, name: 'DAVIS' },
+  // ===== STAFF POSITIONS =====
+  let staffPositions = [
+    {
+      id: 1,
+      name: 'Floor Staff',
+      rate: 25,
+      overtimeRate: 37.5,
+      color: '#3b82f6', // blue
+      people: [
+        { id: 1, name: 'MOODY' }, { id: 2, name: 'SHAWELL' }, { id: 3, name: 'MILLER' },
+        { id: 4, name: 'NGUYEN' }, { id: 5, name: 'JACKSON' }, { id: 6, name: 'MACRINA' },
+        { id: 7, name: 'GARNER' }, { id: 8, name: 'DOUGLAS' }, { id: 9, name: 'MORALES' },
+        { id: 10, name: 'ANDERSON' }, { id: 11, name: 'CLARK' }, { id: 12, name: 'ALLEN' },
+        { id: 13, name: 'BROWN' }, { id: 14, name: 'HOLMES' }, { id: 15, name: 'FOLGEMAN' },
+        { id: 16, name: 'HOLLAND' }, { id: 17, name: 'SANTANA' }, { id: 18, name: 'BRIDGES' },
+        { id: 19, name: 'TRYTHALL' }, { id: 20, name: 'GILBERT' }, { id: 21, name: 'FLOWERS' },
+        { id: 22, name: 'HYDEN' }, { id: 23, name: 'NORMAN' }, { id: 24, name: 'DAVIS' },
+      ],
+      simCounter: 0
+    },
+    {
+      id: 2,
+      name: 'Supervisors',
+      rate: 30,
+      overtimeRate: 30,
+      color: '#9333ea', // purple
+      people: [
+        { id: 1, name: 'SPOFFORD' }, { id: 2, name: 'DUNCAN' }, { id: 3, name: 'SHUMATE' },
+        { id: 4, name: 'ROSNER' }, { id: 5, name: 'DORE' }, { id: 6, name: 'ZAVALA' },
+      ],
+      simCounter: 0
+    }
   ];
+
+  let newPositionName = '';
+  let newStaffNames: Record<number, string> = {};
 
   // ===== SAVE/LOAD SYSTEM =====
   const STORAGE_KEY = 'juvenile-facility-scheduler-data';
@@ -80,12 +102,12 @@
   function saveToLocalStorage() {
     try {
       const data = {
-        staff,
+        staffPositions,
         schedules,
         startDate: startDate.toISOString(),
         editingOpen,
         collapsedSchedules,
-        version: '1.0',
+        version: '3.0',
         savedAt: new Date().toISOString()
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -103,7 +125,7 @@
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
-        staff = data.staff || staff;
+        staffPositions = data.staffPositions || staffPositions;
         schedules = data.schedules || schedules;
         startDate = data.startDate ? new Date(data.startDate) : startDate;
         editingOpen = data.editingOpen || {};
@@ -121,13 +143,13 @@
 
   function exportToJSON() {
     const data = {
-      staff,
+      staffPositions,
       schedules,
       startDate: startDate.toISOString(),
-      version: '1.0',
+      version: '3.0',
       exportedAt: new Date().toISOString(),
       metadata: {
-        totalStaff: staff.length,
+        totalPositions: staffPositions.length,
         totalSchedules: schedules.length
       }
     };
@@ -156,11 +178,11 @@
       try {
         const data = JSON.parse(e.target?.result as string);
         
-        if (!data.staff || !data.schedules) {
+        if (!data.staffPositions || !data.schedules) {
           throw new Error('Invalid file format');
         }
 
-        staff = data.staff;
+        staffPositions = data.staffPositions;
         schedules = data.schedules;
         startDate = data.startDate ? new Date(data.startDate) : new Date(2025, 11, 1);
         
@@ -190,48 +212,40 @@
     if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
       localStorage.removeItem(STORAGE_KEY);
       
-      staff = [
-        { id: 1, name: 'MOODY' }, { id: 2, name: 'SHAWELL' }, { id: 3, name: 'MILLER' },
-        { id: 4, name: 'NGUYEN' }, { id: 5, name: 'JACKSON' }, { id: 6, name: 'MACRINA' },
-        { id: 7, name: 'GARNER' }, { id: 8, name: 'DOUGLAS' }, { id: 9, name: 'MORALES' },
-        { id: 10, name: 'ANDERSON' }, { id: 11, name: 'CLARK' }, { id: 12, name: 'ALLEN' },
-        { id: 13, name: 'BROWN' }, { id: 14, name: 'HOLMES' }, { id: 15, name: 'FOLGEMAN' },
-        { id: 16, name: 'HOLLAND' }, { id: 17, name: 'SANTANA' }, { id: 18, name: 'BRIDGES' },
-        { id: 19, name: 'TRYTHALL' }, { id: 20, name: 'GILBERT' }, { id: 21, name: 'FLOWERS' },
-        { id: 22, name: 'HYDEN' }, { id: 23, name: 'NORMAN' }, { id: 24, name: 'DAVIS' },
+      staffPositions = [
+        {
+          id: 1,
+          name: 'Floor Staff',
+          rate: 25,
+          overtimeRate: 37.5,
+          color: '#3b82f6',
+          people: [
+            { id: 1, name: 'MOODY' }, { id: 2, name: 'SHAWELL' }, { id: 3, name: 'MILLER' },
+            { id: 4, name: 'NGUYEN' }, { id: 5, name: 'JACKSON' }, { id: 6, name: 'MACRINA' },
+            { id: 7, name: 'GARNER' }, { id: 8, name: 'DOUGLAS' }, { id: 9, name: 'MORALES' },
+            { id: 10, name: 'ANDERSON' }, { id: 11, name: 'CLARK' }, { id: 12, name: 'ALLEN' },
+            { id: 13, name: 'BROWN' }, { id: 14, name: 'HOLMES' }, { id: 15, name: 'FOLGEMAN' },
+            { id: 16, name: 'HOLLAND' }, { id: 17, name: 'SANTANA' }, { id: 18, name: 'BRIDGES' },
+            { id: 19, name: 'TRYTHALL' }, { id: 20, name: 'GILBERT' }, { id: 21, name: 'FLOWERS' },
+            { id: 22, name: 'HYDEN' }, { id: 23, name: 'NORMAN' }, { id: 24, name: 'DAVIS' },
+          ],
+          simCounter: 0
+        },
+        {
+          id: 2,
+          name: 'Supervisors',
+          rate: 30,
+          overtimeRate: 30,
+          color: '#9333ea',
+          people: [
+            { id: 1, name: 'SPOFFORD' }, { id: 2, name: 'DUNCAN' }, { id: 3, name: 'SHUMATE' },
+            { id: 4, name: 'ROSNER' }, { id: 5, name: 'DORE' }, { id: 6, name: 'ZAVALA' },
+          ],
+          simCounter: 0
+        }
       ];
       
-      schedules = [
-        autoAssignForSchedule({
-          id: 1,
-          name: '12-Hour 2-2-3 Rotation (Default)',
-          type: '12-hour',
-          rotation: '2-2-3',
-          assignments: {},
-          simStaff: [],
-          simCounter: 0,
-          displayOrder: []
-        }, staff),
-        autoAssignForSchedule({
-          id: 2,
-          name: '12-Hour 4-3 Rotation',
-          type: '12-hour',
-          rotation: '4-3',
-          assignments: {},
-          simStaff: [],
-          simCounter: 0,
-          displayOrder: []
-        }, staff),
-        autoAssignForSchedule({
-          id: 3,
-          name: '10-Hour Rotating Days Off (OT)',
-          type: '10-hour',
-          assignments: {},
-          simStaff: [],
-          simCounter: 0,
-          displayOrder: []
-        }, staff),
-      ];
+      schedules = createDefaultSchedules();
       
       startDate = new Date(2025, 11, 1);
       editingOpen = {};
@@ -241,6 +255,52 @@
       saveStatus = 'All data cleared';
       setTimeout(() => saveStatus = '', 3000);
     }
+  }
+
+  function createDefaultSchedules() {
+    return [
+      autoAssignForSchedule({
+        id: 1,
+        name: '12-Hour 2-2-3 Rotation (Default)',
+        type: '12-hour',
+        rotation: '2-2-3',
+        requiredCounts: {
+          1: { day12: 10, am: 0, pm: 0 },
+          2: { day12: 2, am: 0, pm: 0 }
+        },
+        positionAssignments: {},
+        positionDisplayOrders: {},
+        positionSimStaff: {},
+        positionSimCounters: {}
+      }),
+      autoAssignForSchedule({
+        id: 2,
+        name: '12-Hour 4-3 Rotation',
+        type: '12-hour',
+        rotation: '4-3',
+        requiredCounts: {
+          1: { day12: 10, am: 0, pm: 0 },
+          2: { day12: 2, am: 0, pm: 0 }
+        },
+        positionAssignments: {},
+        positionDisplayOrders: {},
+        positionSimStaff: {},
+        positionSimCounters: {}
+      }),
+      autoAssignForSchedule({
+        id: 3,
+        name: '10-Hour Rotating Days Off (OT)',
+        type: '10-hour',
+        requiredCounts: {
+          1: { day12: 0, am: 10, pm: 10 },
+          2: { day12: 0, am: 2, pm: 2 }
+        },
+        positionAssignments: {},
+        positionDisplayOrders: {},
+        positionSimStaff: {},
+        positionSimCounters: {}
+      }),
+    ];
   }
 
   onMount(() => {
@@ -284,18 +344,18 @@
     return 'sun-mon';
   }
 
-  function buildAssignments12h_A_B(staffList) {
+  function buildAssignments12h_A_B(peopleList) {
     const assignments: Record<number, any> = {};
-    staffList.forEach((s, idx) => {
+    peopleList.forEach((s, idx) => {
       assignments[s.id] = { team: idx % 2 === 0 ? 'A' : 'B' };
     });
     return assignments;
   }
 
-  function buildAssignments10h_AM_PM(staffList) {
+  function buildAssignments10h_AM_PM(peopleList) {
     const assignments: Record<number, any> = {};
-    const half = Math.ceil(staffList.length / 2);
-    staffList.forEach((s, idx) => {
+    const half = Math.ceil(peopleList.length / 2);
+    peopleList.forEach((s, idx) => {
       const shift = idx < half ? 'AM' : 'PM';
       const cycle = DAYS_OFF_CYCLE[idx % DAYS_OFF_CYCLE.length];
       assignments[s.id] = { shift, daysOff: [...cycle] };
@@ -303,64 +363,48 @@
     return assignments;
   }
 
-  function autoAssignForSchedule(schedule, staffList) {
-    const base = (schedule.type === '12-hour')
-      ? { ...schedule, assignments: buildAssignments12h_A_B(staffList) }
-      : { ...schedule, assignments: buildAssignments10h_AM_PM(staffList) };
+  function autoAssignForSchedule(schedule) {
+    const positionAssignments = {};
+    const positionDisplayOrders = {};
+    const positionSimStaff = {};
+    const positionSimCounters = {};
+    
+    // Initialize for each position
+    for (const position of staffPositions) {
+      const assignments = (schedule.type === '12-hour')
+        ? buildAssignments12h_A_B(position.people)
+        : buildAssignments10h_AM_PM(position.people);
+      
+      positionAssignments[position.id] = assignments;
+      positionDisplayOrders[position.id] = position.people.map(p => p.id);
+      positionSimStaff[position.id] = schedule.positionSimStaff?.[position.id] || [];
+      positionSimCounters[position.id] = schedule.positionSimCounters?.[position.id] || 0;
+    }
+    
+    // Initialize required counts if not present
+    if (!schedule.requiredCounts) {
+      schedule.requiredCounts = {};
+      for (const position of staffPositions) {
+        schedule.requiredCounts[position.id] = { day12: 0, am: 0, pm: 0 };
+      }
+    }
+    
     return {
-      ...base,
-      displayOrder: base.displayOrder?.length ? base.displayOrder : staffList.map(s => s.id)
+      ...schedule,
+      positionAssignments,
+      positionDisplayOrders,
+      positionSimStaff,
+      positionSimCounters
     };
   }
 
   function ensureAllSchedulesAssigned() {
-    schedules = schedules.map(s => {
-      const withAssign = autoAssignForSchedule(s, staff);
-      const realIds = staff.map(p => p.id);
-      const sims = withAssign.simStaff?.map(sim => sim.id) ?? [];
-      const allIds = new Set([...realIds, ...sims]);
-      const cleaned = (withAssign.displayOrder || []).filter(id => allIds.has(id));
-      const missing = [...allIds].filter(id => !cleaned.includes(id));
-      return { ...withAssign, displayOrder: [...cleaned, ...missing] };
-    });
+    schedules = schedules.map(s => autoAssignForSchedule(s));
   }
 
   // ===== SCHEDULES =====
-  let schedules = [
-    autoAssignForSchedule({
-      id: 1,
-      name: '12-Hour 2-2-3 Rotation (Default)',
-      type: '12-hour',
-      rotation: '2-2-3',
-      assignments: {},
-      simStaff: [],
-      simCounter: 0,
-      displayOrder: []
-    }, staff),
+  let schedules = createDefaultSchedules();
 
-    autoAssignForSchedule({
-      id: 2,
-      name: '12-Hour 4-3 Rotation',
-      type: '12-hour',
-      rotation: '4-3',
-      assignments: {},
-      simStaff: [],
-      simCounter: 0,
-      displayOrder: []
-    }, staff),
-
-    autoAssignForSchedule({
-      id: 3,
-      name: '10-Hour Rotating Days Off (OT)',
-      type: '10-hour',
-      assignments: {},
-      simStaff: [],
-      simCounter: 0,
-      displayOrder: []
-    }, staff),
-  ];
-
-  let newStaffName = '';
   let newScheduleName = '';
 
   let editingOpen: Record<number, boolean> = {};
@@ -384,46 +428,139 @@
   }
   const getInversePattern = (pattern: number[]) => pattern.map(d => (d ? 0 : 1));
 
-  // ===== CRUD (REAL STAFF) =====
-  function addStaff() {
-    const name = newStaffName.trim();
+  // ===== CRUD (STAFF POSITIONS) =====
+  function addPosition() {
+    const name = newPositionName.trim();
     if (!name) return;
-    const newId = Math.max(0, ...staff.map(s => s.id)) + 1;
-    staff = [...staff, { id: newId, name }];
-    newStaffName = '';
-    ensureAllSchedulesAssigned();
+    const newId = Math.max(0, ...staffPositions.map(p => p.id)) + 1;
+    const newPosition = {
+      id: newId,
+      name,
+      rate: 25,
+      overtimeRate: 37.5,
+      color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+      people: [],
+      simCounter: 0
+    };
+    staffPositions = [...staffPositions, newPosition];
+    newPositionName = '';
+    
+    // Add to all schedules
+    schedules = schedules.map(s => ({
+      ...s,
+      requiredCounts: { ...s.requiredCounts, [newId]: { day12: 0, am: 0, pm: 0 } },
+      positionAssignments: { ...s.positionAssignments, [newId]: {} },
+      positionDisplayOrders: { ...s.positionDisplayOrders, [newId]: [] },
+      positionSimStaff: { ...s.positionSimStaff, [newId]: [] },
+      positionSimCounters: { ...s.positionSimCounters, [newId]: 0 }
+    }));
   }
 
-  function deleteStaff(id: number) {
-    staff = staff.filter(s => s.id !== id);
+  function deletePosition(id: number) {
+    if (staffPositions.length <= 1) {
+      alert('Cannot delete the last position type.');
+      return;
+    }
+    staffPositions = staffPositions.filter(p => p.id !== id);
+    
+    // Remove from all schedules
     schedules = schedules.map(s => {
-      const nextAssignments = Object.fromEntries(
-        Object.entries(s.assignments).filter(([sid]) => parseInt(sid) !== id)
-      );
-      const nextOrder = (s.displayOrder || []).filter((x) => x !== id);
-      return { ...s, assignments: nextAssignments, displayOrder: nextOrder };
+      const { [id]: _, ...restCounts } = s.requiredCounts;
+      const { [id]: __, ...restAssignments } = s.positionAssignments;
+      const { [id]: ___, ...restOrders } = s.positionDisplayOrders;
+      const { [id]: ____, ...restSim} = s.positionSimStaff;
+      const { [id]: _____, ...restCounters } = s.positionSimCounters;
+      return {
+        ...s,
+        requiredCounts: restCounts,
+        positionAssignments: restAssignments,
+        positionDisplayOrders: restOrders,
+        positionSimStaff: restSim,
+        positionSimCounters: restCounters
+      };
     });
   }
 
-  function updateStaffName(id: number, name: string) {
-    staff = staff.map(s => s.id === id ? { ...s, name } : s);
+  function updatePosition(id: number, field: string, value: any) {
+    staffPositions = staffPositions.map(p => 
+      p.id === id ? { ...p, [field]: value } : p
+    );
   }
+
+  // ===== CRUD (STAFF IN POSITIONS) =====
+  function addStaffToPosition(positionId: number) {
+    const name = newStaffNames[positionId]?.trim();
+    if (!name) return;
+    
+    staffPositions = staffPositions.map(pos => {
+      if (pos.id !== positionId) return pos;
+      const newId = Math.max(0, ...pos.people.map(p => p.id)) + 1;
+      return {
+        ...pos,
+        people: [...pos.people, { id: newId, name }]
+      };
+    });
+    
+    newStaffNames[positionId] = '';
+    ensureAllSchedulesAssigned();
+  }
+
+  function deleteStaffFromPosition(positionId: number, staffId: number) {
+    staffPositions = staffPositions.map(pos => {
+      if (pos.id !== positionId) return pos;
+      return {
+        ...pos,
+        people: pos.people.filter(p => p.id !== staffId)
+      };
+    });
+    
+    // Remove from schedules
+    schedules = schedules.map(s => {
+      const assignments = { ...s.positionAssignments[positionId] };
+      delete assignments[staffId];
+      const orders = (s.positionDisplayOrders[positionId] || []).filter(id => id !== staffId);
+      return {
+        ...s,
+        positionAssignments: { ...s.positionAssignments, [positionId]: assignments },
+        positionDisplayOrders: { ...s.positionDisplayOrders, [positionId]: orders }
+      };
+    });
+  }
+
+  function updateStaffInPosition(positionId: number, staffId: number, name: string) {
+    staffPositions = staffPositions.map(pos => {
+      if (pos.id !== positionId) return pos;
+      return {
+        ...pos,
+        people: pos.people.map(p => p.id === staffId ? { ...p, name } : p)
+      };
+    });
+  }
+
+// ... (continuing from previous)
 
   // ===== CRUD (SCHEDULES) =====
   function addSchedule() {
     const name = (newScheduleName.trim() || '12-Hour 2-2-3');
     const newId = Math.max(0, ...schedules.map(s => s.id)) + 1;
+    
+    const requiredCounts = {};
+    for (const position of staffPositions) {
+      requiredCounts[position.id] = { day12: 0, am: 0, pm: 0 };
+    }
+    
     let newSchedule = {
       id: newId,
       name,
       type: '12-hour',
       rotation: '2-2-3',
-      assignments: {},
-      simStaff: [],
-      simCounter: 0,
-      displayOrder: staff.map(s => s.id)
+      requiredCounts,
+      positionAssignments: {},
+      positionDisplayOrders: {},
+      positionSimStaff: {},
+      positionSimCounters: {}
     };
-    newSchedule = autoAssignForSchedule(newSchedule, staff);
+    newSchedule = autoAssignForSchedule(newSchedule);
     schedules = [...schedules, newSchedule];
     newScheduleName = '';
   }
@@ -443,13 +580,16 @@
 
       if (field === 'type') {
         if (value === '12-hour' && !updated.rotation) updated.rotation = '2-2-3';
-        updated = autoAssignForSchedule(updated, staff);
+        updated = autoAssignForSchedule(updated);
       }
 
       if (field === 'rotation' && updated.type === '12-hour') {
-        const allHaveTeam = staff.every(p => updated.assignments[p.id]?.team);
-        if (!allHaveTeam) {
-          updated = { ...updated, assignments: buildAssignments12h_A_B(staff) };
+        // Reassign all positions
+        for (const position of staffPositions) {
+          const allHaveTeam = position.people.every(p => updated.positionAssignments[position.id]?.[p.id]?.team);
+          if (!allHaveTeam) {
+            updated.positionAssignments[position.id] = buildAssignments12h_A_B(position.people);
+          }
         }
       }
 
@@ -457,119 +597,127 @@
     });
   }
 
-  function updateAssignment(scheduleId: number, staffId: number, field: string, value: any) {
+  function updateRequiredCount(scheduleId: number, positionId: number, field: string, value: number) {
+    schedules = schedules.map(s => {
+      if (s.id !== scheduleId) return s;
+      return {
+        ...s,
+        requiredCounts: {
+          ...s.requiredCounts,
+          [positionId]: {
+            ...s.requiredCounts[positionId],
+            [field]: value
+          }
+        }
+      };
+    });
+  }
+
+  function updateAssignment(scheduleId: number, positionId: number, staffId: number, field: string, value: any) {
     schedules = schedules.map(sch => {
       if (sch.id !== scheduleId) return sch;
-      const assignments = { ...sch.assignments };
+      const positionAssignments = { ...sch.positionAssignments };
+      const assignments = { ...positionAssignments[positionId] };
       const prev = assignments[staffId] || (sch.type === '12-hour' ? { team: 'A' } : { shift: 'AM', daysOff: [6,0] });
       assignments[staffId] = { ...prev, [field]: value };
-      return { ...sch, assignments };
+      positionAssignments[positionId] = assignments;
+      return { ...sch, positionAssignments };
     });
   }
 
-  function toggleDayOff(scheduleId: number, staffId: number, dayIndex: number) {
-    schedules = schedules.map(sch => {
-      if (sch.id !== scheduleId) return sch;
-      const assignments = { ...sch.assignments };
-      const prev = assignments[staffId] || { shift: 'AM', daysOff: [] };
-      const daysOff = Array.isArray(prev.daysOff) ? [...prev.daysOff] : [];
-      const idx = daysOff.indexOf(dayIndex);
-      if (idx > -1) daysOff.splice(idx, 1); else daysOff.push(dayIndex);
-      assignments[staffId] = { ...prev, daysOff: daysOff.sort((a,b)=>a-b) };
-      return { ...sch, assignments };
-    });
-  }
-
-  function updateDaysOffPattern(scheduleId: number, staffId: number, pattern: string) {
+  function updateDaysOffPattern(scheduleId: number, positionId: number, staffId: number, pattern: string) {
     const daysOff = DAYS_OFF_PATTERNS[pattern] || [6, 0];
     schedules = schedules.map(sch => {
       if (sch.id !== scheduleId) return sch;
-      const assignments = { ...sch.assignments };
+      const positionAssignments = { ...sch.positionAssignments };
+      const assignments = { ...positionAssignments[positionId] };
       const prev = assignments[staffId] || { shift: 'AM', daysOff: [6, 0] };
       assignments[staffId] = { ...prev, daysOff };
-      return { ...sch, assignments };
+      positionAssignments[positionId] = assignments;
+      return { ...sch, positionAssignments };
     });
   }
 
   // ===== SIMULATED STAFF =====
-  function nextSimId(schedule) {
-    return (schedule.simCounter || 0) + 1;
-  }
-
-  function addSimStaff(scheduleId: number, kind: 'A'|'B'|'AM'|'PM') {
+  function addSimStaff(scheduleId: number, positionId: number, kind: 'A'|'B'|'AM'|'PM') {
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
-      const simCounter = nextSimId(s);
+      
+      const currentCounter = s.positionSimCounters[positionId] || 0;
+      const simCounter = currentCounter + 1;
+      const position = staffPositions.find(p => p.id === positionId);
+      
       const base = {
-        id: `sim-${simCounter}`,
-        name: `[SIM] ${kind} #${simCounter}`
+        id: `sim-${positionId}-${simCounter}`,
+        name: `[SIM ${position?.name}] ${kind} #${simCounter}`
       };
-      const sim =
-        s.type === '12-hour'
-          ? { ...base, team: kind }
-          : { ...base, shift: kind, daysOff: [6,0] };
-      const displayOrder = [...(s.displayOrder || []), sim.id];
+      
+      const sim = s.type === '12-hour'
+        ? { ...base, team: kind }
+        : { ...base, shift: kind, daysOff: [6,0] };
+      
+      const simStaff = [...(s.positionSimStaff[positionId] || []), sim];
+      const displayOrder = [...(s.positionDisplayOrders[positionId] || []), sim.id];
+      
       return {
         ...s,
-        simCounter,
-        simStaff: [...s.simStaff, sim],
-        displayOrder
+        positionSimCounters: { ...s.positionSimCounters, [positionId]: simCounter },
+        positionSimStaff: { ...s.positionSimStaff, [positionId]: simStaff },
+        positionDisplayOrders: { ...s.positionDisplayOrders, [positionId]: displayOrder }
       };
     });
   }
 
-  function deleteSimStaff(scheduleId: number, simId: string) {
+  function deleteSimStaff(scheduleId: number, positionId: number, simId: string) {
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
+      const simStaff = (s.positionSimStaff[positionId] || []).filter(sim => sim.id !== simId);
+      const displayOrder = (s.positionDisplayOrders[positionId] || []).filter(id => id !== simId);
       return {
         ...s,
-        simStaff: s.simStaff.filter(sim => sim.id !== simId),
-        displayOrder: (s.displayOrder || []).filter(x => x !== simId)
+        positionSimStaff: { ...s.positionSimStaff, [positionId]: simStaff },
+        positionDisplayOrders: { ...s.positionDisplayOrders, [positionId]: displayOrder }
       };
     });
   }
 
-  function updateSimStaff(scheduleId: number, simId: string, field: string, value: any) {
+  function updateSimStaff(scheduleId: number, positionId: number, simId: string, field: string, value: any) {
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
-      const simStaff = s.simStaff.map(sim => sim.id === simId ? { ...sim, [field]: value } : sim);
-      return { ...s, simStaff };
+      const simStaff = (s.positionSimStaff[positionId] || []).map(sim => 
+        sim.id === simId ? { ...sim, [field]: value } : sim
+      );
+      return {
+        ...s,
+        positionSimStaff: { ...s.positionSimStaff, [positionId]: simStaff }
+      };
     });
   }
 
-  function toggleSimDayOff(scheduleId: number, simId: string, dayIndex: number) {
-    schedules = schedules.map(s => {
-      if (s.id !== scheduleId) return s;
-      const simStaff = s.simStaff.map(sim => {
-        if (sim.id !== simId) return sim;
-        const daysOff = Array.isArray(sim.daysOff) ? [...sim.daysOff] : [];
-        const idx = daysOff.indexOf(dayIndex);
-        if (idx > -1) daysOff.splice(idx, 1); else daysOff.push(dayIndex);
-        return { ...sim, daysOff: daysOff.sort((a,b)=>a-b) };
-      });
-      return { ...s, simStaff };
-    });
-  }
-
-  function updateSimDaysOffPattern(scheduleId: number, simId: string, pattern: string) {
+  function updateSimDaysOffPattern(scheduleId: number, positionId: number, simId: string, pattern: string) {
     const daysOff = DAYS_OFF_PATTERNS[pattern] || [6, 0];
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
-      const simStaff = s.simStaff.map(sim => {
+      const simStaff = (s.positionSimStaff[positionId] || []).map(sim => {
         if (sim.id !== simId) return sim;
         return { ...sim, daysOff };
       });
-      return { ...s, simStaff };
+      return {
+        ...s,
+        positionSimStaff: { ...s.positionSimStaff, [positionId]: simStaff }
+      };
     });
   }
 
-  function toggleScheduleDay(scheduleId: number, staffId: number, dayIndex: number) {
+  function toggleScheduleDay(scheduleId: number, positionId: number, staffId: number, dayIndex: number) {
     schedules = schedules.map(sch => {
       if (sch.id !== scheduleId) return sch;
 
-      const newAssignments: Record<string, any> = {};
-      for (const key of Object.keys(sch.assignments)) {
-        const a = sch.assignments[key];
+      const positionAssignments = { ...sch.positionAssignments };
+      const newAssignments: Record<string, any> = { ...positionAssignments[positionId] };
+      
+      for (const key of Object.keys(newAssignments)) {
+        const a = newAssignments[key];
         newAssignments[key] = { ...a };
         if (a.daysOff) newAssignments[key].daysOff = [...a.daysOff];
         if (a.manualSchedule) newAssignments[key].manualSchedule = [...a.manualSchedule];
@@ -582,20 +730,21 @@
       }
 
       if (!newAssignments[staffId].manualSchedule) {
-        const current = generateSchedule({ ...sch, assignments: newAssignments }, staffId);
+        const current = generateSchedule(sch, positionId, staffId);
         newAssignments[staffId].manualSchedule = [...current];
       }
       const cur = newAssignments[staffId].manualSchedule[dayIndex];
       newAssignments[staffId].manualSchedule[dayIndex] = cur === 1 ? 0 : 1;
 
-      return { ...sch, assignments: newAssignments, lastEdited: Date.now() };
+      positionAssignments[positionId] = newAssignments;
+      return { ...sch, positionAssignments, lastEdited: Date.now() };
     });
   }
 
-  function toggleScheduleDayForSim(scheduleId: number, simId: string, dayIndex: number) {
+  function toggleScheduleDayForSim(scheduleId: number, positionId: number, simId: string, dayIndex: number) {
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
-      const simStaff = s.simStaff.map(sim => {
+      const simStaff = (s.positionSimStaff[positionId] || []).map(sim => {
         if (sim.id !== simId) return sim;
         const manual = sim.manualSchedule
           ? [...sim.manualSchedule]
@@ -603,53 +752,56 @@
         manual[dayIndex] = manual[dayIndex] === 1 ? 0 : 1;
         return { ...sim, manualSchedule: manual };
       });
-      return { ...s, simStaff, lastEdited: Date.now() };
+      return {
+        ...s,
+        positionSimStaff: { ...s.positionSimStaff, [positionId]: simStaff },
+        lastEdited: Date.now()
+      };
     });
   }
 
   function resetManualEdits(scheduleId: number) {
     schedules = schedules.map(sch => {
       if (sch.id !== scheduleId) return sch;
-      const assignments: Record<string, any> = {};
-      for (const key of Object.keys(sch.assignments)) {
-        const a = { ...sch.assignments[key] };
-        delete a.manualSchedule;
-        assignments[key] = a;
+      
+      const positionAssignments = {};
+      for (const posId of Object.keys(sch.positionAssignments)) {
+        const assignments: Record<string, any> = {};
+        for (const key of Object.keys(sch.positionAssignments[posId])) {
+          const a = { ...sch.positionAssignments[posId][key] };
+          delete a.manualSchedule;
+          assignments[key] = a;
+        }
+        positionAssignments[posId] = assignments;
       }
-      const simStaff = sch.simStaff.map(sim => {
-        const copy = { ...sim };
-        delete copy.manualSchedule;
-        return copy;
-      });
-      return { ...sch, assignments, simStaff };
+      
+      const positionSimStaff = {};
+      for (const posId of Object.keys(sch.positionSimStaff)) {
+        const simStaff = (sch.positionSimStaff[posId] || []).map(sim => {
+          const copy = { ...sim };
+          delete copy.manualSchedule;
+          return copy;
+        });
+        positionSimStaff[posId] = simStaff;
+      }
+      
+      return { ...sch, positionAssignments, positionSimStaff };
     });
   }
 
-  function reorderList(scheduleId: number, fromId: string | number, toId: string | number) {
+  function reorderList(scheduleId: number, positionId: number, fromId: string | number, toId: string | number) {
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
-      const order = [...(s.displayOrder || [])];
+      const order = [...(s.positionDisplayOrders[positionId] || [])];
       const fromIdx = order.indexOf(fromId);
       const toIdx = order.indexOf(toId);
       if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return s;
       const [moved] = order.splice(fromIdx, 1);
       order.splice(toIdx, 0, moved);
-      return { ...s, displayOrder: order };
-    });
-  }
-
-  function moveStaffInSchedule(scheduleId: number, staffId: string | number, direction: 'up' | 'down') {
-    schedules = schedules.map(s => {
-      if (s.id !== scheduleId) return s;
-      const order = [...(s.displayOrder || [])];
-      const idx = order.indexOf(staffId);
-      if (idx === -1) return s;
-      
-      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (newIdx < 0 || newIdx >= order.length) return s;
-      
-      [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
-      return { ...s, displayOrder: order };
+      return {
+        ...s,
+        positionDisplayOrders: { ...s.positionDisplayOrders, [positionId]: order }
+      };
     });
   }
 
@@ -689,8 +841,8 @@
     });
   }
 
-  function generateSchedule(schedule, staffId: number) {
-    const assignment = schedule.assignments[staffId];
+  function generateSchedule(schedule, positionId: number, staffId: number) {
+    const assignment = schedule.positionAssignments[positionId]?.[staffId];
     if (!assignment) return Array(14).fill(0);
     if (assignment.manualSchedule) return assignment.manualSchedule;
     return generateScheduleForAssignment(schedule, assignment);
@@ -700,130 +852,158 @@
     let totalCost = 0;
     let totalHours = 0;
 
-    const rowsReal: any[] = [];
-    const rowsSim: any[] = [];
-
-    const dailyCoverage = Array(14).fill(0);
-    const amCoverage = Array(14).fill(0);
-    const pmCoverage = Array(14).fill(0);
+    const positionDetails = {};
+    const positionCoverage = {};
 
     const hoursPerShift = schedule.type === '12-hour' ? 12 : 10;
 
-    for (const s of staff) {
-      const scheduleData = generateSchedule(schedule, s.id);
-      const a = schedule.assignments[s.id] || {};
-      const staffTotalHours = scheduleData.reduce((sum, d) => sum + d * hoursPerShift, 0);
+    // Process each position
+    for (const position of staffPositions) {
+      const posId = position.id;
+      const rowsReal: any[] = [];
+      const rowsSim: any[] = [];
 
-      let regularHours, overtimeHours, staffCost;
-      if (staffTotalHours > 80) {
-        regularHours = 80;
-        overtimeHours = staffTotalHours - 80;
-        staffCost = (regularHours * regularRate) + (overtimeHours * overtimeRate);
-      } else {
-        regularHours = staffTotalHours;
-        overtimeHours = 0;
-        staffCost = staffTotalHours * regularRate;
+      const dailyCoverage = Array(14).fill(0);
+      const amCoverage = Array(14).fill(0);
+      const pmCoverage = Array(14).fill(0);
+
+      // Process real staff in this position
+      for (const person of position.people) {
+        const scheduleData = generateSchedule(schedule, posId, person.id);
+        const a = schedule.positionAssignments[posId]?.[person.id] || {};
+        const personTotalHours = scheduleData.reduce((sum, d) => sum + d * hoursPerShift, 0);
+
+        let regularHours, overtimeHours, personCost;
+        if (personTotalHours > 80) {
+          regularHours = 80;
+          overtimeHours = personTotalHours - 80;
+          personCost = (regularHours * position.rate) + (overtimeHours * position.overtimeRate);
+        } else {
+          regularHours = personTotalHours;
+          overtimeHours = 0;
+          personCost = personTotalHours * position.rate;
+        }
+
+        totalCost += personCost;
+        totalHours += personTotalHours;
+
+        rowsReal.push({
+          id: person.id,
+          name: person.name,
+          hours: personTotalHours,
+          regularHours,
+          overtimeHours,
+          cost: personCost,
+          schedule: scheduleData,
+          team: a.team,
+          shift: a.shift,
+          simulated: false,
+          isEdited: !!a.manualSchedule
+        });
+
+        scheduleData.forEach((on, idx) => {
+          if (schedule.type === '12-hour') {
+            dailyCoverage[idx] += on;
+          } else {
+            if (a.shift === 'AM') amCoverage[idx] += on;
+            if (a.shift === 'PM') pmCoverage[idx] += on;
+          }
+        });
       }
 
-      totalCost += staffCost;
-      totalHours += staffTotalHours;
+      // Process simulated staff in this position
+      for (const sim of (schedule.positionSimStaff[posId] || [])) {
+        const sched = sim.manualSchedule ? sim.manualSchedule : generateScheduleForAssignment(schedule, sim);
+        const simHours = sched.reduce((sum, d) => sum + d * hoursPerShift, 0);
 
-      rowsReal.push({
-        id: s.id,
-        name: s.name,
-        hours: staffTotalHours,
-        regularHours,
-        overtimeHours,
-        cost: staffCost,
-        schedule: scheduleData,
-        team: a.team,
-        shift: a.shift,
-        simulated: false,
-        isEdited: !!a.manualSchedule
-      });
-
-      scheduleData.forEach((on, idx) => {
-        if (schedule.type === '12-hour') {
-          dailyCoverage[idx] += on;
+        let regularHours, overtimeHours, simCost;
+        if (simHours > 80) {
+          regularHours = 80;
+          overtimeHours = simHours - 80;
+          simCost = (regularHours * position.rate) + (overtimeHours * position.overtimeRate);
         } else {
-          if (a.shift === 'AM') amCoverage[idx] += on;
-          if (a.shift === 'PM') pmCoverage[idx] += on;
+          regularHours = simHours;
+          overtimeHours = 0;
+          simCost = simHours * position.rate;
         }
-      });
-    }
 
-    for (const sim of schedule.simStaff || []) {
-      const sched = sim.manualSchedule ? sim.manualSchedule : generateScheduleForAssignment(schedule, sim);
-      const simHours = sched.reduce((sum, d) => sum + d * hoursPerShift, 0);
+        totalCost += simCost;
+        totalHours += simHours;
 
-      let regularHours, overtimeHours, simCost;
-      if (simHours > 80) {
-        regularHours = 80;
-        overtimeHours = simHours - 80;
-        simCost = (regularHours * regularRate) + (overtimeHours * overtimeRate);
-      } else {
-        regularHours = simHours;
-        overtimeHours = 0;
-        simCost = simHours * regularRate;
+        rowsSim.push({
+          id: sim.id,
+          name: sim.name || `[SIM]`,
+          hours: simHours,
+          regularHours,
+          overtimeHours,
+          cost: simCost,
+          schedule: sched,
+          team: sim.team,
+          shift: sim.shift,
+          simulated: true,
+          isEdited: !!sim.manualSchedule
+        });
+
+        sched.forEach((on, idx) => {
+          if (schedule.type === '12-hour') {
+            dailyCoverage[idx] += on;
+          } else {
+            if (sim.shift === 'AM') amCoverage[idx] += on;
+            if (sim.shift === 'PM') pmCoverage[idx] += on;
+          }
+        });
       }
 
-      totalCost += simCost;
-      totalHours += simHours;
+      // Order rows
+      const mapById = new Map<string | number, any>();
+      [...rowsReal, ...rowsSim].forEach(row => mapById.set(row.id, row));
+      const ordered: any[] = [];
+      const order = schedule.positionDisplayOrders[posId] || [];
+      for (const id of order) {
+        if (mapById.has(id)) ordered.push(mapById.get(id));
+        mapById.delete(id);
+      }
+      for (const leftover of mapById.values()) ordered.push(leftover);
 
-      rowsSim.push({
-        id: sim.id,
-        name: sim.name || `[SIM]`,
-        hours: simHours,
-        regularHours,
-        overtimeHours,
-        cost: simCost,
-        schedule: sched,
-        team: sim.team,
-        shift: sim.shift,
-        simulated: true,
-        isEdited: !!sim.manualSchedule
-      });
-
-      sched.forEach((on, idx) => {
-        if (schedule.type === '12-hour') {
-          dailyCoverage[idx] += on;
-        } else {
-          if (sim.shift === 'AM') amCoverage[idx] += on;
-          if (sim.shift === 'PM') pmCoverage[idx] += on;
-        }
-      });
+      positionDetails[posId] = ordered;
+      positionCoverage[posId] = {
+        dailyCoverage,
+        amCoverage,
+        pmCoverage
+      };
     }
 
-    const mapById = new Map<string | number, any>();
-    [...rowsReal, ...rowsSim].forEach(row => mapById.set(row.id, row));
-    const ordered: any[] = [];
-    const order = schedule.displayOrder || [];
-
-    for (const id of order) {
-      if (mapById.has(id)) ordered.push(mapById.get(id));
-      mapById.delete(id);
-    }
-    for (const leftover of mapById.values()) ordered.push(leftover);
-
+    // Calculate gap OT
     let gapOTHours = 0;
-    if (schedule.type === '12-hour') {
-      dailyCoverage.forEach(c => {
-        if (c < requiredStaff) gapOTHours += (requiredStaff - c) * 12;
-      });
-    } else {
-      amCoverage.forEach(c => { if (c < requiredStaff) gapOTHours += (requiredStaff - c) * 10; });
-      pmCoverage.forEach(c => { if (c < requiredStaff) gapOTHours += (requiredStaff - c) * 10; });
+    for (const position of staffPositions) {
+      const posId = position.id;
+      const required = schedule.requiredCounts[posId] || { day12: 0, am: 0, pm: 0 };
+      const coverage = positionCoverage[posId];
+      
+      if (schedule.type === '12-hour') {
+        coverage.dailyCoverage.forEach(c => {
+          if (c < required.day12) gapOTHours += (required.day12 - c) * 12;
+        });
+      } else {
+        coverage.amCoverage.forEach(c => {
+          if (c < required.am) gapOTHours += (required.am - c) * 10;
+        });
+        coverage.pmCoverage.forEach(c => {
+          if (c < required.pm) gapOTHours += (required.pm - c) * 10;
+        });
+      }
     }
-    const gapOTCost = gapOTHours * overtimeRate;
+    
+    // Use the highest overtime rate for gap coverage
+    const maxOvertimeRate = Math.max(...staffPositions.map(p => p.overtimeRate));
+    const gapOTCost = gapOTHours * maxOvertimeRate;
     totalCost += gapOTCost;
 
     return {
       totalCost,
       totalHours,
-      staffDetails: ordered,
-      dailyCoverage,
-      amCoverage,
-      pmCoverage,
+      positionDetails,
+      positionCoverage,
       gapOTHours,
       gapOTCost
     };
@@ -835,8 +1015,8 @@
     twoWeekCosts: allScheduleCosts.map(c => c.totalCost),
     yearlyCosts: allScheduleCosts.map(c => c.totalCost * 26),
     avgHoursPerStaff: allScheduleCosts.map(c => {
-      const totalStaff = staff.length + (schedules.find((_, i) => i === allScheduleCosts.indexOf(c))?.simStaff?.length || 0);
-      return totalStaff > 0 ? (c.totalHours / totalStaff).toFixed(1) : 0;
+      const totalPeople = staffPositions.reduce((sum, pos) => sum + pos.people.length, 0);
+      return totalPeople > 0 ? (c.totalHours / totalPeople).toFixed(1) : 0;
     })
   };
 
@@ -868,20 +1048,18 @@
   />
 {:else}
   <SchedulerApp
-    {regularRate}
-    {overtimeRate}
-    {requiredStaff}
     {startDate}
     {saveStatus}
     {lastSaved}
-    {staff}
+    {staffPositions}
     {schedules}
     {dates}
     {days}
     {costAnalysis}
     {editingOpen}
     {collapsedSchedules}
-    bind:newStaffName
+    bind:newPositionName
+    bind:newStaffNames
     bind:newScheduleName
     bind:fileInput
     on:logout={logout}
@@ -891,27 +1069,28 @@
     on:clearAll={clearAllData}
     on:shiftPeriod={(e) => shiftPeriod(e.detail)}
     on:setStartDate={setStartFromInput}
-    on:addStaff={addStaff}
-    on:deleteStaff={(e) => deleteStaff(e.detail)}
-    on:updateStaffName={(e) => updateStaffName(e.detail.id, e.detail.name)}
+    on:addPosition={addPosition}
+    on:deletePosition={(e) => deletePosition(e.detail)}
+    on:updatePosition={(e) => updatePosition(e.detail.id, e.detail.field, e.detail.value)}
+    on:addStaffToPosition={(e) => addStaffToPosition(e.detail)}
+    on:deleteStaffFromPosition={(e) => deleteStaffFromPosition(e.detail.positionId, e.detail.staffId)}
+    on:updateStaffInPosition={(e) => updateStaffInPosition(e.detail.positionId, e.detail.staffId, e.detail.name)}
     on:addSchedule={addSchedule}
     on:deleteSchedule={(e) => deleteSchedule(e.detail)}
     on:updateSchedule={(e) => updateSchedule(e.detail.id, e.detail.field, e.detail.value)}
+    on:updateRequiredCount={(e) => updateRequiredCount(e.detail.scheduleId, e.detail.positionId, e.detail.field, e.detail.value)}
     on:toggleEditing={(e) => toggleEditing(e.detail)}
     on:toggleCollapse={(e) => toggleCollapse(e.detail)}
-    on:addSimStaff={(e) => addSimStaff(e.detail.scheduleId, e.detail.kind)}
-    on:deleteSimStaff={(e) => deleteSimStaff(e.detail.scheduleId, e.detail.simId)}
-    on:updateSimStaff={(e) => updateSimStaff(e.detail.scheduleId, e.detail.simId, e.detail.field, e.detail.value)}
-    on:updateAssignment={(e) => updateAssignment(e.detail.scheduleId, e.detail.staffId, e.detail.field, e.detail.value)}
-    on:toggleDayOff={(e) => toggleDayOff(e.detail.scheduleId, e.detail.staffId, e.detail.dayIndex)}
-    on:toggleSimDayOff={(e) => toggleSimDayOff(e.detail.scheduleId, e.detail.simId, e.detail.dayIndex)}
-    on:toggleScheduleDay={(e) => toggleScheduleDay(e.detail.scheduleId, e.detail.staffId, e.detail.dayIndex)}
-    on:toggleScheduleDayForSim={(e) => toggleScheduleDayForSim(e.detail.scheduleId, e.detail.simId, e.detail.dayIndex)}
+    on:addSimStaff={(e) => addSimStaff(e.detail.scheduleId, e.detail.positionId, e.detail.kind)}
+    on:deleteSimStaff={(e) => deleteSimStaff(e.detail.scheduleId, e.detail.positionId, e.detail.simId)}
+    on:updateSimStaff={(e) => updateSimStaff(e.detail.scheduleId, e.detail.positionId, e.detail.simId, e.detail.field, e.detail.value)}
+    on:updateAssignment={(e) => updateAssignment(e.detail.scheduleId, e.detail.positionId, e.detail.staffId, e.detail.field, e.detail.value)}
+    on:toggleScheduleDay={(e) => toggleScheduleDay(e.detail.scheduleId, e.detail.positionId, e.detail.staffId, e.detail.dayIndex)}
+    on:toggleScheduleDayForSim={(e) => toggleScheduleDayForSim(e.detail.scheduleId, e.detail.positionId, e.detail.simId, e.detail.dayIndex)}
     on:resetManualEdits={(e) => resetManualEdits(e.detail)}
-    on:reorderList={(e) => reorderList(e.detail.scheduleId, e.detail.fromId, e.detail.toId)}
-    on:moveStaff={(e) => moveStaffInSchedule(e.detail.scheduleId, e.detail.staffId, e.detail.direction)}
-    on:updateDaysOffPattern={(e) => updateDaysOffPattern(e.detail.scheduleId, e.detail.staffId, e.detail.pattern)}
-    on:updateSimDaysOffPattern={(e) => updateSimDaysOffPattern(e.detail.scheduleId, e.detail.simId, e.detail.pattern)}
+    on:reorderList={(e) => reorderList(e.detail.scheduleId, e.detail.positionId, e.detail.fromId, e.detail.toId)}
+    on:updateDaysOffPattern={(e) => updateDaysOffPattern(e.detail.scheduleId, e.detail.positionId, e.detail.staffId, e.detail.pattern)}
+    on:updateSimDaysOffPattern={(e) => updateSimDaysOffPattern(e.detail.scheduleId, e.detail.positionId, e.detail.simId, e.detail.pattern)}
     {generateSchedule}
     {generateScheduleForAssignment}
     {calculateScheduleCosts}
