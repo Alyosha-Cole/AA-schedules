@@ -65,15 +65,15 @@
       on:updatePosition
     />
 
-    {#each staffPositions as position (position.id)}
-      <PositionRoster
-        {position}
-        bind:newStaffName={newStaffNames[position.id]}
-        on:addStaff={() => dispatch('addStaffToPosition', position.id)}
-        on:deleteStaff
-        on:updateStaff
-      />
-    {/each}
+{#each staffPositions as position (position.id)}
+  <PositionRoster
+    {position}
+    bind:newStaffName={newStaffNames[position.id]}
+    on:addStaff={() => dispatch('addStaffToPosition', position.id)}
+    on:deleteStaff={(e) => dispatch('deleteStaffFromPosition', e.detail)}
+    on:updateStaff={(e) => dispatch('updateStaffInPosition', e.detail)}
+  />
+{/each}
 
     <ScheduleConfigs
       {schedules}
