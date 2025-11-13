@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, Edit2, Trash2 } from 'lucide-svelte';
+  import { Plus, Trash2 } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
 
   export let schedules: any[];
@@ -69,15 +69,6 @@
             <option value="4-3">4-3 Rotation (B: Sun–Tue, A: Wed–Fri; Sat alternates)</option>
           </select>
         {/if}
-        <button
-          on:click={() => dispatch('toggleEditing', schedule.id)}
-          class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
-          aria-pressed={!!editingOpen[schedule.id]}
-          aria-controls={`assign-panel-${schedule.id}`}
-        >
-          <Edit2 class="w-4 h-4" aria-hidden="true" />
-          {editingOpen[schedule.id] ? 'Done' : 'Assign'}
-        </button>
         <button
           on:click={() => dispatch('deleteSchedule', schedule.id)}
           class="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"

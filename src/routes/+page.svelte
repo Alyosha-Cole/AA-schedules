@@ -263,6 +263,27 @@
     [4,5],
   ];
 
+  const DAYS_OFF_PATTERNS = {
+    'sun-mon': [6, 0],
+    'mon-tue': [0, 1],
+    'tue-wed': [1, 2],
+    'wed-thu': [2, 3],
+    'thu-fri': [3, 4],
+    'fri-sat': [4, 5],
+    'sat-sun': [5, 6]
+  };
+
+  function getDaysOffPattern(daysOff: number[]): string {
+    if (!daysOff || daysOff.length === 0) return 'sun-mon';
+    const sorted = [...daysOff].sort((a, b) => a - b);
+    for (const [key, pattern] of Object.entries(DAYS_OFF_PATTERNS)) {
+      if (pattern.length === sorted.length && pattern.every((v, i) => v === sorted[i])) {
+        return key;
+      }
+    }
+    return 'sun-mon';
+  }
+
   function buildAssignments12h_A_B(staffList) {
     const assignments: Record<number, any> = {};
     staffList.forEach((s, idx) => {
@@ -459,6 +480,17 @@
     });
   }
 
+  function updateDaysOffPattern(scheduleId: number, staffId: number, pattern: string) {
+    const daysOff = DAYS_OFF_PATTERNS[pattern] || [6, 0];
+    schedules = schedules.map(sch => {
+      if (sch.id !== scheduleId) return sch;
+      const assignments = { ...sch.assignments };
+      const prev = assignments[staffId] || { shift: 'AM', daysOff: [6, 0] };
+      assignments[staffId] = { ...prev, daysOff };
+      return { ...sch, assignments };
+    });
+  }
+
   // ===== SIMULATED STAFF =====
   function nextSimId(schedule) {
     return (schedule.simCounter || 0) + 1;
@@ -514,6 +546,18 @@
         const idx = daysOff.indexOf(dayIndex);
         if (idx > -1) daysOff.splice(idx, 1); else daysOff.push(dayIndex);
         return { ...sim, daysOff: daysOff.sort((a,b)=>a-b) };
+      });
+      return { ...s, simStaff };
+    });
+  }
+
+  function updateSimDaysOffPattern(scheduleId: number, simId: string, pattern: string) {
+    const daysOff = DAYS_OFF_PATTERNS[pattern] || [6, 0];
+    schedules = schedules.map(s => {
+      if (s.id !== scheduleId) return s;
+      const simStaff = s.simStaff.map(sim => {
+        if (sim.id !== simId) return sim;
+        return { ...sim, daysOff };
       });
       return { ...s, simStaff };
     });
@@ -590,6 +634,21 @@
       if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return s;
       const [moved] = order.splice(fromIdx, 1);
       order.splice(toIdx, 0, moved);
+      return { ...s, displayOrder: order };
+    });
+  }
+
+  function moveStaffInSchedule(scheduleId: number, staffId: string | number, direction: 'up' | 'down') {
+    schedules = schedules.map(s => {
+      if (s.id !== scheduleId) return s;
+      const order = [...(s.displayOrder || [])];
+      const idx = order.indexOf(staffId);
+      if (idx === -1) return s;
+      
+      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= order.length) return s;
+      
+      [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
       return { ...s, displayOrder: order };
     });
   }
@@ -850,8 +909,12 @@
     on:toggleScheduleDayForSim={(e) => toggleScheduleDayForSim(e.detail.scheduleId, e.detail.simId, e.detail.dayIndex)}
     on:resetManualEdits={(e) => resetManualEdits(e.detail)}
     on:reorderList={(e) => reorderList(e.detail.scheduleId, e.detail.fromId, e.detail.toId)}
+    on:moveStaff={(e) => moveStaffInSchedule(e.detail.scheduleId, e.detail.staffId, e.detail.direction)}
+    on:updateDaysOffPattern={(e) => updateDaysOffPattern(e.detail.scheduleId, e.detail.staffId, e.detail.pattern)}
+    on:updateSimDaysOffPattern={(e) => updateSimDaysOffPattern(e.detail.scheduleId, e.detail.simId, e.detail.pattern)}
     {generateSchedule}
     {generateScheduleForAssignment}
     {calculateScheduleCosts}
+    {getDaysOffPattern}
   />
 {/if}

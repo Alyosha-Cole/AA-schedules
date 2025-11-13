@@ -25,6 +25,7 @@
   export let generateSchedule: (schedule: any, staffId: number) => number[];
   export let generateScheduleForAssignment: (schedule: any, assignment: any) => number[];
   export let calculateScheduleCosts: (schedule: any) => any;
+  export let getDaysOffPattern: (daysOff: number[]) => string;
 
   const dispatch = createEventDispatcher();
 
@@ -90,6 +91,7 @@
         {generateSchedule}
         {generateScheduleForAssignment}
         {calculateScheduleCosts}
+        {getDaysOffPattern}
         on:toggleCollapse
         on:toggleEditing
         on:addSimStaff
@@ -102,6 +104,9 @@
         on:toggleScheduleDayForSim
         on:resetManualEdits
         on:reorderList
+        on:moveStaff
+        on:updateDaysOffPattern
+        on:updateSimDaysOffPattern
       />
     {/each}
 
