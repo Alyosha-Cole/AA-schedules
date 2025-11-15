@@ -781,7 +781,7 @@
       newAssignments[staffId].manualSchedule[dayIndex] = cur === 1 ? 0 : 1;
 
       positionAssignments[positionId] = newAssignments;
-      return { ...sch, positionAssignments, lastEdited: Date.now() };
+      return { ...sch, positionAssignments };
     });
   }
 
@@ -798,8 +798,7 @@
       });
       return {
         ...s,
-        positionSimStaff: { ...s.positionSimStaff, [positionId]: simStaff },
-        lastEdited: Date.now()
+        positionSimStaff: { ...s.positionSimStaff, [positionId]: simStaff }
       };
     });
   }
