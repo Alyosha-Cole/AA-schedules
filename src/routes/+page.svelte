@@ -95,10 +95,6 @@
   let saveStatus = '';
   let fileInput: HTMLInputElement;
 
-  $: if (typeof window !== 'undefined' && isAuthenticated) {
-    saveToLocalStorage();
-  }
-
   function saveToLocalStorage() {
     try {
       const data = {
@@ -113,9 +109,10 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       lastSaved = new Date();
       saveStatus = 'Auto-saved';
+      console.log('✓ Auto-saved to localStorage at', lastSaved.toLocaleTimeString());
       setTimeout(() => saveStatus = '', 2000);
     } catch (e) {
-      console.error('Failed to save to localStorage:', e);
+      console.error('✗ Failed to save to localStorage:', e);
       saveStatus = 'Save failed';
     }
   }
@@ -132,11 +129,15 @@
         collapsedSchedules = data.collapsedSchedules || {};
         lastSaved = data.savedAt ? new Date(data.savedAt) : null;
         saveStatus = 'Loaded from auto-save';
+        console.log('✓ Loaded from localStorage. Last saved:', lastSaved?.toLocaleString());
+        console.log('  - Schedules loaded:', schedules.length);
+        console.log('  - Staff positions loaded:', staffPositions.length);
         setTimeout(() => saveStatus = '', 3000);
         return true;
       }
+      console.log('ℹ No saved data found in localStorage');
     } catch (e) {
-      console.error('Failed to load from localStorage:', e);
+      console.error('✗ Failed to load from localStorage:', e);
     }
     return false;
   }
@@ -182,6 +183,10 @@
           throw new Error('Invalid file format');
         }
 
+        console.log('📥 Importing JSON file:', file.name);
+        console.log('  - Schedules to import:', data.schedules.length);
+        console.log('  - Staff positions to import:', data.staffPositions.length);
+
         staffPositions = data.staffPositions;
         schedules = data.schedules;
         startDate = data.startDate ? new Date(data.startDate) : new Date(2025, 11, 1);
@@ -190,11 +195,12 @@
         collapsedSchedules = {};
         
         saveStatus = 'Imported successfully';
+        console.log('✓ Import successful! Data loaded and saved to localStorage');
         setTimeout(() => saveStatus = '', 3000);
         
         saveToLocalStorage();
       } catch (error) {
-        console.error('Failed to import:', error);
+        console.error('✗ Failed to import:', error);
         saveStatus = 'Import failed - invalid file';
         setTimeout(() => saveStatus = '', 3000);
       }
@@ -415,6 +421,14 @@
   let collapsedSchedules: Record<number, boolean> = {};
   function toggleCollapse(id: number) {
     collapsedSchedules = { ...collapsedSchedules, [id]: !collapsedSchedules[id] };
+  }
+
+  // ===== AUTO-SAVE SYSTEM =====
+  // This reactive statement watches ALL the variables we want to auto-save
+  // It will trigger whenever any of these variables change
+  $: if (typeof window !== 'undefined' && isAuthenticated && 
+         (schedules || staffPositions || startDate || editingOpen || collapsedSchedules)) {
+    saveToLocalStorage();
   }
 
   // ===== ROTATION HELPERS =====
