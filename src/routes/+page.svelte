@@ -94,6 +94,7 @@
   let lastSaved: Date | null = null;
   let saveStatus = '';
   let fileInput: HTMLInputElement;
+  let isInitialLoad = true; // Prevent auto-save during initial component load
 
   function saveToLocalStorage() {
     try {
@@ -155,6 +156,13 @@
       }
     };
     
+    console.log('📤 Exporting current state to JSON');
+    console.log('  - Schedules being exported:', schedules.length);
+    console.log('  - Staff positions being exported:', staffPositions.length);
+    console.log('  - Total schedule assignments:', schedules.reduce((sum, s) => {
+      return sum + Object.keys(s.positionAssignments || {}).length;
+    }, 0));
+    
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -166,13 +174,27 @@
     URL.revokeObjectURL(url);
     
     saveStatus = 'Exported to JSON';
+    console.log('✓ Export complete!');
     setTimeout(() => saveStatus = '', 3000);
   }
 
-  function importFromJSON(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
+  function importFromJSON(event: CustomEvent) {
+    // Handle the event - it might be wrapped in a CustomEvent
+    const originalEvent = event.detail || event;
+    const input = originalEvent.target as HTMLInputElement;
+    
+    console.log('🔍 Import triggered');
+    console.log('  - Event:', event);
+    console.log('  - Original event:', originalEvent);
+    console.log('  - Input element:', input);
+    
+    const file = input?.files?.[0];
+    if (!file) {
+      console.log('⚠️ No file selected');
+      return;
+    }
+
+    console.log('📁 File selected:', file.name);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -195,10 +217,10 @@
         collapsedSchedules = {};
         
         saveStatus = 'Imported successfully';
-        console.log('✓ Import successful! Data loaded and saved to localStorage');
+        console.log('✓ Import successful! Data loaded and will auto-save');
         setTimeout(() => saveStatus = '', 3000);
         
-        saveToLocalStorage();
+        // Reactive statement will trigger auto-save
       } catch (error) {
         console.error('✗ Failed to import:', error);
         saveStatus = 'Import failed - invalid file';
@@ -207,7 +229,8 @@
     };
     reader.readAsText(file);
     
-    input.value = '';
+    // Clear input to allow re-importing same file
+    if (input) input.value = '';
   }
 
   function triggerImport() {
@@ -320,6 +343,12 @@
         ensureAllSchedulesAssigned();
       }
     }
+    
+    // Allow auto-save to trigger after initial load is complete
+    // Use setTimeout to ensure this happens after all reactive statements settle
+    setTimeout(() => {
+      isInitialLoad = false;
+    }, 100);
   });
 
   // ===== ASSIGNMENT HELPERS =====
@@ -426,7 +455,8 @@
   // ===== AUTO-SAVE SYSTEM =====
   // This reactive statement watches ALL the variables we want to auto-save
   // It will trigger whenever any of these variables change
-  $: if (typeof window !== 'undefined' && isAuthenticated && 
+  // BUT it won't trigger during initial component load (to prevent overwriting imports)
+  $: if (typeof window !== 'undefined' && isAuthenticated && !isInitialLoad &&
          (schedules || staffPositions || startDate || editingOpen || collapsedSchedules)) {
     saveToLocalStorage();
   }
