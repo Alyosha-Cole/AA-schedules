@@ -93,7 +93,14 @@
   }
 
   function printSchedule() {
-    window.print();
+    // Mark this schedule for printing
+    const scheduleEl = document.querySelector(`[data-schedule-id="${schedule.id}"]`);
+    if (scheduleEl) {
+      scheduleEl.classList.add('print-target');
+      window.print();
+      // Remove the class after printing
+      setTimeout(() => scheduleEl.classList.remove('print-target'), 100);
+    }
   }
 </script>
 
@@ -116,15 +123,38 @@
   }
 
   @media print {
+    /* Hide ALL schedules by default */
+    :global([data-schedule-id]) {
+      display: none !important;
+    }
+    
+    /* Show ONLY the schedule being printed */
+    :global([data-schedule-id].print-target) {
+      display: block !important;
+    }
+
+    /* Hide interactive elements and executive info */
     :global(button),
     :global(input[type="number"]),
-    :global(select) {
+    :global(select),
+    .text-sm.text-slate-600.flex.gap-4,
+    .flex.items-center.gap-4:has(input) {
       display: none !important;
     }
 
+    /* Hide the regular table and show print table */
+    .overflow-x-auto {
+      display: none !important;
+    }
+
+    .hidden.print\\:block {
+      display: block !important;
+    }
+
+    /* Portrait orientation for Week 1/Week 2 layout */
     @page {
       margin: 0.5in;
-      size: landscape;
+      size: portrait;
     }
 
     :global(body) {
@@ -132,23 +162,102 @@
       -webkit-print-color-adjust: exact;
     }
 
+    /* Compact container */
+    .bg-white {
+      padding: 0.25rem !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+    }
+
+    /* Compact header */
+    .flex.items-center.justify-between.mb-4 {
+      margin-bottom: 0.25rem !important;
+      padding-bottom: 0.25rem !important;
+      border-bottom: 1px solid #cbd5e1 !important;
+    }
+
+    h2 {
+      font-size: 14pt !important;
+      margin: 0 0 0.5rem 0 !important;
+      text-align: center !important;
+    }
+
+    /* Hide the top-left title, keep only centered title */
+    .flex.items-center.justify-between.mb-4 h2 {
+      display: none !important;
+    }
+
+    /* Week headers */
+    h3 {
+      font-size: 11pt !important;
+      margin: 0.5rem 0 0.25rem 0 !important;
+      page-break-after: avoid !important;
+    }
+
+    /* Page breaks */
+    .print-page-break-after {
+      page-break-after: always !important;
+    }
+
+    .print-page-break-before {
+      page-break-before: always !important;
+    }
+
+    /* Hide position selector and print header */
+    .mb-4.flex.gap-2,
+    .hidden.print\\:block.mb-2 {
+      display: none !important;
+    }
+
+    /* Print table styles */
     table {
-      font-size: 9pt;
+      width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 7pt !important;
+      page-break-inside: auto !important;
+      border: 2px solid #1e293b !important;
     }
 
-    td, th {
-      print-color-adjust: exact;
-      -webkit-print-color-adjust: exact;
-      padding: 4px !important;
+    thead {
+      display: table-header-group !important;
     }
 
-    th.sticky, td.sticky {
-      position: static !important;
+    tbody tr {
+      page-break-inside: avoid !important;
+    }
+
+    th, td {
+      print-color-adjust: exact !important;
+      -webkit-print-color-adjust: exact !important;
+      padding: 2px 6px !important;
+      border: 1px solid #1e293b !important;
+    }
+
+    /* Make name column narrower - about 1/4 size */
+    th:first-child,
+    td:first-child {
+      width: 25% !important;
+      max-width: 25% !important;
+    }
+
+    /* Position header rows */
+    tbody tr[style*="background-color"] td {
+      font-weight: bold !important;
+      font-size: 8pt !important;
+    }
+
+    /* Ensure colors print */
+    .bg-green-100 {
+      background-color: #dcfce7 !important;
+    }
+
+    .bg-slate-200 {
+      background-color: #e2e8f0 !important;
     }
   }
 </style>
 
-<div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+<div class="bg-white rounded-lg shadow-lg p-6 mb-6" data-schedule-id="{schedule.id}">
   <div class="flex items-center justify-between mb-4 pb-4 border-b-2 border-slate-200">
     <div class="flex items-center gap-3">
       <button
@@ -288,23 +397,8 @@
   </div>
 
   {#if !isCollapsed}
-    <div class="mb-3 flex items-center justify-between">
-      <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg flex-1 mr-2">
-        <div class="flex items-center gap-2 text-sm text-blue-800">
-          <span class="font-semibold">💡 Tip:</span>
-          <span>Click any cell to toggle ON/OFF. Use dropdowns to change assignments. Drag rows to reorder.</span>
-        </div>
-      </div>
-      <button
-        on:click={() => dispatch('resetManualEdits', schedule.id)}
-        class="px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium whitespace-nowrap"
-      >
-        Reset All Edits
-      </button>
-    </div>
-
     <!-- Position Selector -->
-    <div class="mb-4 flex gap-2">
+    <div class="mb-4 flex gap-2 print:hidden">
       {#each staffPositions as position (position.id)}
         <button
           class="px-4 py-2 rounded font-medium transition-colors flex items-center gap-2"
@@ -353,9 +447,17 @@
               Add SIM PM
             </button>
           {/if}
+          
+          <button
+            on:click={() => dispatch('resetManualEdits', schedule.id)}
+            class="px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors text-sm font-medium"
+          >
+            Reset All Edits
+          </button>
         </div>
       {/if}
     </div>
+
 
     <div class="overflow-x-auto">
       <table class="w-full border-separate border-spacing-0 text-sm">
@@ -405,75 +507,67 @@
               </td>
               
               <td class="border border-slate-300 px-3 py-2 sticky left-[3.5rem] bg-white z-20">
-                <div class="flex items-center justify-between gap-2 mb-1">
-                  <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <span class="font-medium truncate">{detail.name}</span>
-                    {#if detail.simulated}
-                      <span class="text-xs bg-amber-600 text-white px-1.5 py-0.5 rounded flex-shrink-0">SIM</span>
-                      <button
-                        on:click={() => dispatch('deleteSimStaff', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id })}
-                        class="p-0.5 text-red-600 hover:bg-red-50 rounded flex-shrink-0"
-                        title="Delete simulated staff"
-                      >
-                        <Trash2 class="w-3 h-3" aria-hidden="true" />
-                      </button>
-                    {/if}
+                {#if detail.simulated}
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium">SIM #{idx + 1}</span>
+                    <span class="text-xs bg-amber-600 text-white px-1.5 py-0.5 rounded flex-shrink-0">SIM</span>
+                    <button
+                      on:click={() => dispatch('deleteSimStaff', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id })}
+                      class="p-0.5 text-red-600 hover:bg-red-50 rounded flex-shrink-0"
+                      title="Delete simulated staff"
+                    >
+                      <Trash2 class="w-3 h-3" aria-hidden="true" />
+                    </button>
                   </div>
-                </div>
-                
-                {#if schedule.type === '12-hour'}
-                  <select
-                    class="compact-select w-16 py-0.5 border rounded text-xs focus:ring-1"
-                    style="border-color: {activePosition?.color}; focus:ring-color: {activePosition?.color}"
-                    value={assignment?.team || 'A'}
-                    on:change={(e) => {
-                      const val = (e.currentTarget as HTMLSelectElement).value;
-                      if (isSim) {
-                        dispatch('updateSimStaff', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id, field: 'team', value: val });
-                      } else {
-                        dispatch('updateAssignment', { scheduleId: schedule.id, positionId: activePositionId, staffId: detail.id, field: 'team', value: val });
-                      }
-                    }}
-                  >
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                  </select>
                 {:else}
-                  <div class="flex gap-1">
-                    <select
-                      class="compact-select w-12 py-0.5 border rounded text-xs focus:ring-1"
-                      style="border-color: {activePosition?.color}"
-                      value={assignment?.shift || 'AM'}
-                      on:change={(e) => {
-                        const val = (e.currentTarget as HTMLSelectElement).value;
-                        if (isSim) {
-                          dispatch('updateSimStaff', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id, field: 'shift', value: val });
-                        } else {
-                          dispatch('updateAssignment', { scheduleId: schedule.id, positionId: activePositionId, staffId: detail.id, field: 'shift', value: val });
-                        }
-                      }}
-                    >
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
-                    <select
-                      class="compact-select w-20 py-0.5 border rounded text-xs focus:ring-1"
-                      style="border-color: {activePosition?.color}"
-                      value={getDaysOffPattern(assignment?.daysOff || [6, 0])}
-                      on:change={(e) => {
-                        const val = (e.currentTarget as HTMLSelectElement).value;
-                        if (isSim) {
-                          dispatch('updateSimDaysOffPattern', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id, pattern: val });
-                        } else {
-                          dispatch('updateDaysOffPattern', { scheduleId: schedule.id, positionId: activePositionId, staffId: detail.id, pattern: val });
-                        }
-                      }}
-                    >
-                      {#each daysOffOptions as option}
-                        <option value={option.value}>{option.label}</option>
-                      {/each}
-                    </select>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                      <span class="font-medium truncate">{detail.name}</span>
+                    </div>
                   </div>
+                  
+                  {#if schedule.type === '12-hour'}
+                    <select
+                      class="compact-select w-16 py-0.5 border rounded text-xs focus:ring-1"
+                      style="border-color: {activePosition?.color}; focus:ring-color: {activePosition?.color}"
+                      value={assignment?.team || 'A'}
+                      on:change={(e) => {
+                        const val = (e.currentTarget as HTMLSelectElement).value;
+                        dispatch('updateAssignment', { scheduleId: schedule.id, positionId: activePositionId, staffId: detail.id, field: 'team', value: val });
+                      }}
+                    >
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                    </select>
+                  {:else}
+                    <div class="flex gap-1">
+                      <select
+                        class="compact-select w-12 py-0.5 border rounded text-xs focus:ring-1"
+                        style="border-color: {activePosition?.color}"
+                        value={assignment?.shift || 'AM'}
+                        on:change={(e) => {
+                          const val = (e.currentTarget as HTMLSelectElement).value;
+                          dispatch('updateAssignment', { scheduleId: schedule.id, positionId: activePositionId, staffId: detail.id, field: 'shift', value: val });
+                        }}
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                      <select
+                        class="compact-select w-20 py-0.5 border rounded text-xs focus:ring-1"
+                        style="border-color: {activePosition?.color}"
+                        value={getDaysOffPattern(assignment?.daysOff || [6, 0])}
+                        on:change={(e) => {
+                          const val = (e.currentTarget as HTMLSelectElement).value;
+                          dispatch('updateDaysOffPattern', { scheduleId: schedule.id, positionId: activePositionId, staffId: detail.id, pattern: val });
+                        }}
+                      >
+                        {#each daysOffOptions as option}
+                          <option value={option.value}>{option.label}</option>
+                        {/each}
+                      </select>
+                    </div>
+                  {/if}
                 {/if}
               </td>
 
@@ -564,4 +658,128 @@
       </table>
     </div>
   {/if}
+
+  <!-- PRINT-ONLY TABLES: Week 1 and Week 2 as separate pages -->
+  <div class="hidden print:block">
+    <!-- Schedule Title (only on first page) -->
+    <h2 class="text-center font-bold text-lg mb-3">{schedule.name}</h2>
+    
+    <!-- Week 1 Table -->
+    <div class="print-page-break-after">
+      <h3 class="text-center font-bold text-base mb-2">Week 1</h3>
+      <table class="w-full border-collapse text-xs mb-4">
+        <thead>
+          <tr>
+            <th class="border border-slate-900 px-2 py-1 bg-slate-200 font-bold text-left">Name</th>
+            {#each dates.slice(0, 7) as d}
+              <th class="border border-slate-900 px-1 py-1 bg-slate-200 text-xs">
+                <div>{d.dayName}</div>
+                <div class="text-[6pt]">{d.date}</div>
+              </th>
+            {/each}
+          </tr>
+        </thead>
+        <tbody>
+          {#each staffPositions as position (position.id)}
+            {@const positionDetails = costs.positionDetails[position.id] || []}
+            
+            <!-- Position header row -->
+            <tr style="background-color: {position.color}40">
+              <td class="border border-slate-900 px-2 py-1 font-bold text-sm" style="color: {position.color}">
+                {position.name}
+              </td>
+              <td class="border border-slate-900" colspan="7"></td>
+            </tr>
+            
+            <!-- Staff rows for this position -->
+            {#each positionDetails as detail}
+              {@const sched = detail.schedule}
+              {@const assignment = !detail.simulated 
+                ? schedule.positionAssignments[position.id]?.[detail.id]
+                : (schedule.positionSimStaff[position.id] || []).find(s => s.id === detail.id)}
+              {@const teamLabel = assignment?.team || assignment?.shift || ''}
+              {@const shiftTime = schedule.type === '12-hour'
+                ? '8:30a-8:30p'
+                : (assignment?.shift === 'AM' ? '7a-5p' : '1p-11p')}
+              
+              <tr>
+                <td class="border border-slate-900 px-2 py-1 text-left">
+                  <span class="font-medium">{detail.name}</span>
+                  {#if teamLabel}
+                    <span class="text-[6pt] ml-1">({teamLabel})</span>
+                  {/if}
+                </td>
+                
+                <!-- Week 1 days (0-6) -->
+                {#each sched.slice(0, 7) as working}
+                  <td class="border border-slate-900 px-1 py-1 text-center text-[6pt] {working ? 'bg-green-100' : ''}">
+                    {working ? shiftTime : 'OFF'}
+                  </td>
+                {/each}
+              </tr>
+            {/each}
+          {/each}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Week 2 Table (new page) -->
+    <div class="print-page-break-before">
+      <h3 class="text-center font-bold text-base mb-2">Week 2</h3>
+      <table class="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            <th class="border border-slate-900 px-2 py-1 bg-slate-200 font-bold text-left">Name</th>
+            {#each dates.slice(7, 14) as d}
+              <th class="border border-slate-900 px-1 py-1 bg-slate-200 text-xs">
+                <div>{d.dayName}</div>
+                <div class="text-[6pt]">{d.date}</div>
+              </th>
+            {/each}
+          </tr>
+        </thead>
+        <tbody>
+          {#each staffPositions as position (position.id)}
+            {@const positionDetails = costs.positionDetails[position.id] || []}
+            
+            <!-- Position header row -->
+            <tr style="background-color: {position.color}40">
+              <td class="border border-slate-900 px-2 py-1 font-bold text-sm" style="color: {position.color}">
+                {position.name}
+              </td>
+              <td class="border border-slate-900" colspan="7"></td>
+            </tr>
+            
+            <!-- Staff rows for this position -->
+            {#each positionDetails as detail}
+              {@const sched = detail.schedule}
+              {@const assignment = !detail.simulated 
+                ? schedule.positionAssignments[position.id]?.[detail.id]
+                : (schedule.positionSimStaff[position.id] || []).find(s => s.id === detail.id)}
+              {@const teamLabel = assignment?.team || assignment?.shift || ''}
+              {@const shiftTime = schedule.type === '12-hour'
+                ? '8:30a-8:30p'
+                : (assignment?.shift === 'AM' ? '7a-5p' : '1p-11p')}
+              
+              <tr>
+                <td class="border border-slate-900 px-2 py-1 text-left">
+                  <span class="font-medium">{detail.name}</span>
+                  {#if teamLabel}
+                    <span class="text-[6pt] ml-1">({teamLabel})</span>
+                  {/if}
+                </td>
+                
+                <!-- Week 2 days (7-13) -->
+                {#each sched.slice(7, 14) as working}
+                  <td class="border border-slate-900 px-1 py-1 text-center text-[6pt] {working ? 'bg-green-100' : ''}">
+                    {working ? shiftTime : 'OFF'}
+                  </td>
+                {/each}
+              </tr>
+            {/each}
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
