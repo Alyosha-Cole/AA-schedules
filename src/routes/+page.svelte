@@ -287,50 +287,111 @@
   }
 
   function createDefaultSchedules() {
-    return [
-      autoAssignForSchedule({
-        id: 1,
-        name: '12-Hour 2-2-3 Rotation (Default)',
-        type: '12-hour',
-        rotation: '2-2-3',
-        requiredCounts: {
-          1: { day12: 10, am: 0, pm: 0 },
-          2: { day12: 2, am: 0, pm: 0 }
-        },
-        positionAssignments: {},
-        positionDisplayOrders: {},
-        positionSimStaff: {},
-        positionSimCounters: {}
-      }),
-      autoAssignForSchedule({
-        id: 2,
-        name: '12-Hour 4-3 Rotation',
-        type: '12-hour',
-        rotation: '4-3',
-        requiredCounts: {
-          1: { day12: 10, am: 0, pm: 0 },
-          2: { day12: 2, am: 0, pm: 0 }
-        },
-        positionAssignments: {},
-        positionDisplayOrders: {},
-        positionSimStaff: {},
-        positionSimCounters: {}
-      }),
-      autoAssignForSchedule({
-        id: 3,
-        name: '10-Hour Rotating Days Off (OT)',
-        type: '10-hour',
-        requiredCounts: {
-          1: { day12: 0, am: 10, pm: 10 },
-          2: { day12: 0, am: 2, pm: 2 }
-        },
-        positionAssignments: {},
-        positionDisplayOrders: {},
-        positionSimStaff: {},
-        positionSimCounters: {}
-      }),
-    ];
+  // Schedule 1: 12-Hour 2-2-3 Rotation (84 Hours) - standard 2-2-3
+  const schedule1 = autoAssignForSchedule({
+    id: 1,
+    name: '12-Hour 2-2-3 Rotation (84 Hours)',
+    type: '12-hour',
+    rotation: '2-2-3',
+    requiredCounts: {
+      1: { day12: 10, am: 0, pm: 0 }, // Floor Staff
+      2: { day12: 1, am: 0, pm: 0 }   // Supervisors
+    },
+    positionAssignments: {},
+    positionDisplayOrders: {},
+    positionSimStaff: {},
+    positionSimCounters: {}
+  });
+
+  // Schedule 2: 12-Hour 2-2-3 Rotation (96 Hours) - 2-2-3 + one extra day per staff
+  const schedule2Base = autoAssignForSchedule({
+    id: 2,
+    name: '12-Hour 2-2-3 Rotation (96 Hours)',
+    type: '12-hour',
+    rotation: '2-2-3',
+    requiredCounts: {
+      1: { day12: 10, am: 0, pm: 0 }, // Floor Staff
+      2: { day12: 1, am: 0, pm: 0 }   // Supervisors
+    },
+    positionAssignments: {},
+    positionDisplayOrders: {},
+    positionSimStaff: {},
+    positionSimCounters: {}
+  });
+
+  // --- Build 96-hour patterns ---
+
+  // Normal 2-2-3 pattern (Team A): 7 workdays in 14
+  const basePatternA = getRotationPattern('2-2-3'); // [1,1,0,0,1,1,1,0,0,1,1,0,0,0]
+  const basePatternB = getInversePattern(basePatternA); // Team B is opposite
+
+  // Indices of OFF days for each team (places we can drop the extra shift)
+  const offDaysA = basePatternA
+    .map((v, idx) => (v === 0 ? idx : -1))
+    .filter((i) => i >= 0);
+  const offDaysB = basePatternB
+    .map((v, idx) => (v === 0 ? idx : -1))
+    .filter((i) => i >= 0);
+
+  const teamConfig: Record<'A' | 'B', {
+    base: number[];
+    offDays: number[];
+    nextIdx: number;
+  }> = {
+    A: { base: basePatternA, offDays: offDaysA, nextIdx: 0 },
+    B: { base: basePatternB, offDays: offDaysB, nextIdx: 0 }
+  };
+
+  // For each position (Floor Staff, Supervisors, etc.), give EVERY staff:
+  //   - the normal 2-2-3 pattern for their team
+  //   - plus ONE extra day (from that team's off days), rotating through the off days
+  for (const position of staffPositions) {
+    const posId = position.id;
+    const posAssignments = schedule2Base.positionAssignments[posId] || {};
+
+    for (const person of position.people) {
+      const existing = posAssignments[person.id] || {};
+      const team = (existing.team || 'A') as 'A' | 'B';
+      const cfg = teamConfig[team];
+      if (!cfg) continue;
+
+      // Start from the base 2-2-3 pattern for that team
+      const pattern = [...cfg.base];
+
+      // Choose which OFF day this specific staff will pick up as their extra shift
+      const offIndex = cfg.offDays[cfg.nextIdx % cfg.offDays.length];
+      cfg.nextIdx += 1;
+
+      // Flip that day from 0 → 1, so they now have 8 workdays (96 hours)
+      pattern[offIndex] = 1;
+
+      posAssignments[person.id] = {
+        ...existing,
+        manualSchedule: pattern
+      };
+    }
+
+    schedule2Base.positionAssignments[posId] = posAssignments;
   }
+
+  // Schedule 3: 10-Hour (100 Hours) - rotating days off
+  const schedule3 = autoAssignForSchedule({
+    id: 3,
+    name: '10-Hour (100 Hours)',
+    type: '10-hour',
+    requiredCounts: {
+      1: { day12: 0, am: 8, pm: 10 }, // Floor Staff
+      2: { day12: 0, am: 1, pm: 1 }   // Supervisors
+    },
+    positionAssignments: {},
+    positionDisplayOrders: {},
+    positionSimStaff: {},
+    positionSimCounters: {}
+  });
+
+  return [schedule1, schedule2Base, schedule3];
+}
+
 
   onMount(() => {
     if (sessionStorage.getItem('scheduler-auth') === 'true') {
@@ -399,39 +460,61 @@
   }
 
   function autoAssignForSchedule(schedule) {
-    const positionAssignments = {};
-    const positionDisplayOrders = {};
-    const positionSimStaff = {};
-    const positionSimCounters = {};
-    
-    // Initialize for each position
-    for (const position of staffPositions) {
-      const assignments = (schedule.type === '12-hour')
+  const positionAssignments: Record<number, any> = {};
+  const positionDisplayOrders: Record<number, (number | string)[]> = {};
+  const positionSimStaff: Record<number, any[]> = {};
+  const positionSimCounters: Record<number, number> = {};
+
+  for (const position of staffPositions) {
+    // Base assignments (A/B teams for 12-hour, AM/PM+daysOff for 10-hour)
+    const baseAssignments =
+      schedule.type === '12-hour'
         ? buildAssignments12h_A_B(position.people)
         : buildAssignments10h_AM_PM(position.people);
-      
-      positionAssignments[position.id] = assignments;
-      positionDisplayOrders[position.id] = position.people.map(p => p.id);
-      positionSimStaff[position.id] = schedule.positionSimStaff?.[position.id] || [];
-      positionSimCounters[position.id] = schedule.positionSimCounters?.[position.id] || 0;
+
+    const prevAssignments = schedule.positionAssignments?.[position.id] || {};
+    const mergedAssignments: Record<number, any> = {};
+
+    for (const person of position.people) {
+      const base = baseAssignments[person.id];
+      const existing = prevAssignments[person.id];
+
+      // Merge so we KEEP things like manualSchedule, daysOff, etc.
+      mergedAssignments[person.id] = existing
+        ? { ...base, ...existing }
+        : base;
     }
-    
-    // Initialize required counts if not present
-    if (!schedule.requiredCounts) {
-      schedule.requiredCounts = {};
-      for (const position of staffPositions) {
-        schedule.requiredCounts[position.id] = { day12: 0, am: 0, pm: 0 };
-      }
-    }
-    
-    return {
-      ...schedule,
-      positionAssignments,
-      positionDisplayOrders,
-      positionSimStaff,
-      positionSimCounters
-    };
+
+    positionAssignments[position.id] = mergedAssignments;
+
+    // Keep any existing custom order if present, otherwise default to staff order
+    positionDisplayOrders[position.id] =
+      schedule.positionDisplayOrders?.[position.id] ||
+      position.people.map((p) => p.id);
+
+    positionSimStaff[position.id] =
+      schedule.positionSimStaff?.[position.id] || [];
+    positionSimCounters[position.id] =
+      schedule.positionSimCounters?.[position.id] || 0;
   }
+
+  // Initialize required counts if not present
+  if (!schedule.requiredCounts) {
+    schedule.requiredCounts = {};
+    for (const position of staffPositions) {
+      schedule.requiredCounts[position.id] = { day12: 0, am: 0, pm: 0 };
+    }
+  }
+
+  return {
+    ...schedule,
+    positionAssignments,
+    positionDisplayOrders,
+    positionSimStaff,
+    positionSimCounters
+  };
+}
+
 
   function ensureAllSchedulesAssigned() {
     schedules = schedules.map(s => autoAssignForSchedule(s));
@@ -461,16 +544,21 @@
     saveToLocalStorage();
   }
 
-  // ===== ROTATION HELPERS =====
-  function getRotationPattern(rotation: string) {
-    switch (rotation) {
-      case '2-2-3':
-        return [1,1,0,0,1,1,1,0,0,1,1,0,0,0];
-      default:
-        return Array(14).fill(0);
-    }
+// ===== ROTATION HELPERS =====
+function getRotationPattern(rotation: string) {
+  switch (rotation) {
+    case '2-2-3':
+      return [1,1,0,0,1,1,1,0,0,1,1,0,0,0];
+    default:
+      return Array(14).fill(0);
   }
-  const getInversePattern = (pattern: number[]) => pattern.map(d => (d ? 0 : 1));
+}
+
+// 👇 change THIS:
+function getInversePattern(pattern: number[]): number[] {
+  return pattern.map((d) => (d ? 0 : 1));
+}
+
 
   // ===== CRUD (STAFF POSITIONS) =====
   function addPosition() {
