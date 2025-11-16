@@ -79,8 +79,8 @@
       overtimeRate: 30,
       color: '#9333ea', // purple
       people: [
-        { id: 1, name: 'SPOFFORD' }, { id: 2, name: 'DUNCAN' }, { id: 3, name: 'SHUMATE' },
-        { id: 4, name: 'ROSNER' }, { id: 5, name: 'DORE' }, { id: 6, name: 'ZAVALA' },
+        { id: 1, name: 'SPOFFORD' }, { id: 2, name: 'ROSNER' }, { id: 3, name: 'DUNCAN' },
+        { id: 4, name: 'SHUMATE' }, { id: 5, name: 'DORE' }, { id: 6, name: 'ZAVALA' },
       ],
       simCounter: 0
     }
@@ -267,8 +267,8 @@
           overtimeRate: 30,
           color: '#9333ea',
           people: [
-            { id: 1, name: 'SPOFFORD' }, { id: 2, name: 'DUNCAN' }, { id: 3, name: 'SHUMATE' },
-            { id: 4, name: 'ROSNER' }, { id: 5, name: 'DORE' }, { id: 6, name: 'ZAVALA' },
+            { id: 1, name: 'SPOFFORD' }, { id: 2, name: 'ROSNER' }, { id: 3, name: 'DUNCAN' },
+            { id: 4, name: 'SHUMATE' }, { id: 5, name: 'DORE' }, { id: 6, name: 'ZAVALA' },
           ],
           simCounter: 0
         }
@@ -287,7 +287,7 @@
   }
 
 function createDefaultSchedules() {
-  // Schedule 1: 12-Hour 2-2-3 Rotation (84 Hours) - standard 2-2-3
+  // ===== SCHEDULE 1: 12-Hour 2-2-3 (84 Hours) =====
   const schedule1 = autoAssignForSchedule({
     id: 1,
     name: '12-Hour 2-2-3 Rotation (84 Hours)',
@@ -303,7 +303,30 @@ function createDefaultSchedules() {
     positionSimCounters: {}
   });
 
-  // Schedule 2: 12-Hour 2-2-3 Rotation (96 Hours) - 2-2-3 + one extra day per staff
+  // For the 84-hour schedule:
+  // Order staff by team: all A's first, then all B's (per position)
+  for (const position of staffPositions) {
+    const posId = position.id;
+    const posAssignments = schedule1.positionAssignments[posId] || {};
+
+    const meta = position.people.map((p, index) => {
+      const a = posAssignments[p.id] || { team: 'A' };
+      const team = (a.team || 'A') as 'A' | 'B';
+      return { id: p.id, team, originalIndex: index };
+    });
+
+    meta.sort((a, b) => {
+      if (a.team !== b.team) {
+        return a.team === 'A' ? -1 : 1; // A team first, then B
+      }
+      // keep original order within each team
+      return a.originalIndex - b.originalIndex;
+    });
+
+    schedule1.positionDisplayOrders[posId] = meta.map((m) => m.id);
+  }
+
+  // ===== SCHEDULE 2: 12-Hour 2-2-3 (96 Hours) =====
   const schedule2Base = autoAssignForSchedule({
     id: 2,
     name: '12-Hour 2-2-3 Rotation (96 Hours)',
@@ -350,7 +373,7 @@ function createDefaultSchedules() {
     const posId = position.id;
     const posAssignments = schedule2Base.positionAssignments[posId] || {};
 
-    // We'll collect metadata for ordering
+    // Collect metadata for ordering
     const meta: { id: number; team: 'A' | 'B'; extraDayIndex: number }[] = [];
 
     for (const person of position.people) {
@@ -393,7 +416,7 @@ function createDefaultSchedules() {
     schedule2Base.positionDisplayOrders[posId] = [...orderA, ...orderB];
   }
 
-  // Schedule 3: 10-Hour (100 Hours) - rotating days off
+  // ===== SCHEDULE 3: 10-Hour (100 Hours) =====
   const schedule3 = autoAssignForSchedule({
     id: 3,
     name: '10-Hour (100 Hours)',
@@ -408,8 +431,38 @@ function createDefaultSchedules() {
     positionSimCounters: {}
   });
 
+  // For the 10-hour schedule:
+  // Group by shift (AM first, then PM), then by days-off pattern so people
+  // who share the same pattern line up together.
+  for (const position of staffPositions) {
+    const posId = position.id;
+    const posAssignments = schedule3.positionAssignments[posId] || {};
+
+    const meta = position.people.map((p, index) => {
+      const a = posAssignments[p.id] || { shift: 'AM', daysOff: [6, 0] };
+      const shift = (a.shift || 'AM') as 'AM' | 'PM';
+      const patternKey = getDaysOffPattern(a.daysOff || [6, 0]);
+      return { id: p.id, shift, patternKey, originalIndex: index };
+    });
+
+    meta.sort((a, b) => {
+      // AM staff first, then PM
+      if (a.shift !== b.shift) {
+        return a.shift === 'AM' ? -1 : 1;
+      }
+      // Within the same shift, group by days-off pattern
+      if (a.patternKey < b.patternKey) return -1;
+      if (a.patternKey > b.patternKey) return 1;
+      // Keep original order within the same pattern
+      return a.originalIndex - b.originalIndex;
+    });
+
+    schedule3.positionDisplayOrders[posId] = meta.map((m) => m.id);
+  }
+
   return [schedule1, schedule2Base, schedule3];
 }
+
 
 
 
