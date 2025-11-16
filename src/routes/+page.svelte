@@ -286,7 +286,7 @@
     }
   }
 
-  function createDefaultSchedules() {
+function createDefaultSchedules() {
   // Schedule 1: 12-Hour 2-2-3 Rotation (84 Hours) - standard 2-2-3
   const schedule1 = autoAssignForSchedule({
     id: 1,
@@ -325,7 +325,7 @@
   const basePatternA = getRotationPattern('2-2-3'); // [1,1,0,0,1,1,1,0,0,1,1,0,0,0]
   const basePatternB = getInversePattern(basePatternA); // Team B is opposite
 
-  // Indices of OFF days for each team (places we can drop the extra shift)
+  // Indices of OFF days for each team (places we can add the extra shift)
   const offDaysA = basePatternA
     .map((v, idx) => (v === 0 ? idx : -1))
     .filter((i) => i >= 0);
@@ -345,9 +345,13 @@
   // For each position (Floor Staff, Supervisors, etc.), give EVERY staff:
   //   - the normal 2-2-3 pattern for their team
   //   - plus ONE extra day (from that team's off days), rotating through the off days
+  // Then order them: all A's (grouped by extra day), then all B's (grouped by extra day)
   for (const position of staffPositions) {
     const posId = position.id;
     const posAssignments = schedule2Base.positionAssignments[posId] || {};
+
+    // We'll collect metadata for ordering
+    const meta: { id: number; team: 'A' | 'B'; extraDayIndex: number }[] = [];
 
     for (const person of position.people) {
       const existing = posAssignments[person.id] || {};
@@ -369,9 +373,24 @@
         ...existing,
         manualSchedule: pattern
       };
+
+      meta.push({ id: person.id, team, extraDayIndex: offIndex });
     }
 
     schedule2Base.positionAssignments[posId] = posAssignments;
+
+    // Build order: A team sorted by extraDayIndex, then B team sorted by extraDayIndex
+    const orderA = meta
+      .filter((m) => m.team === 'A')
+      .sort((a, b) => a.extraDayIndex - b.extraDayIndex)
+      .map((m) => m.id);
+
+    const orderB = meta
+      .filter((m) => m.team === 'B')
+      .sort((a, b) => a.extraDayIndex - b.extraDayIndex)
+      .map((m) => m.id);
+
+    schedule2Base.positionDisplayOrders[posId] = [...orderA, ...orderB];
   }
 
   // Schedule 3: 10-Hour (100 Hours) - rotating days off
@@ -391,6 +410,7 @@
 
   return [schedule1, schedule2Base, schedule3];
 }
+
 
 
   onMount(() => {
