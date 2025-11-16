@@ -36,8 +36,9 @@
   }
 </script>
 
-<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
+<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 print:p-0 print:bg-white">
   <div class="max-w-7xl mx-auto">
+    <div class="print:hidden">
     <SchedulerHeader
       {staffPositions}
       {startDate}
@@ -84,6 +85,7 @@
       on:updateSchedule
       on:toggleEditing
     />
+    </div>
 
     {#each schedules as schedule (schedule.id + '-' + (schedule.lastEdited || 0) + '-' + startDate.getTime())}
       <ScheduleDetail

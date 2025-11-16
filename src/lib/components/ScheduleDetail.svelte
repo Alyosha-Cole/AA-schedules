@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, ChevronRight, Trash2, Plus } from 'lucide-svelte';
+  import { ChevronDown, ChevronRight, Trash2, Plus, Printer } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
 
   export let schedule: any;
@@ -91,6 +91,10 @@
       return Math.max(required.am, required.pm);
     }
   }
+
+  function printSchedule() {
+    window.print();
+  }
 </script>
 
 <style>
@@ -110,6 +114,38 @@
   .dragging {
     opacity: 0.5;
   }
+
+  @media print {
+    :global(button),
+    :global(input[type="number"]),
+    :global(select) {
+      display: none !important;
+    }
+
+    @page {
+      margin: 0.5in;
+      size: landscape;
+    }
+
+    :global(body) {
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    table {
+      font-size: 9pt;
+    }
+
+    td, th {
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+      padding: 4px !important;
+    }
+
+    th.sticky, td.sticky {
+      position: static !important;
+    }
+  }
 </style>
 
 <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -126,6 +162,14 @@
         {:else}
           <ChevronDown class="w-6 h-6 text-slate-600" aria-hidden="true" />
         {/if}
+      </button>
+      <button
+        on:click={printSchedule}
+        class="p-2 hover:bg-blue-50 rounded transition-colors print:hidden"
+        title="Print this schedule"
+        aria-label="Print schedule"
+      >
+        <Printer class="w-6 h-6 text-blue-600" aria-hidden="true" />
       </button>
       
       <div class="flex flex-col gap-1">
