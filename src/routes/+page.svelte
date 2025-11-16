@@ -663,7 +663,16 @@
       const positionAssignments = { ...sch.positionAssignments };
       const assignments = { ...positionAssignments[positionId] };
       const prev = assignments[staffId] || (sch.type === '12-hour' ? { team: 'A' } : { shift: 'AM', daysOff: [6,0] });
-      assignments[staffId] = { ...prev, [field]: value };
+      
+      // Create new assignment with updated field
+      const newAssignment = { ...prev, [field]: value };
+      
+      // If changing team or shift, clear any manual schedule so they follow the new pattern
+      if (field === 'team' || field === 'shift') {
+        delete newAssignment.manualSchedule;
+      }
+      
+      assignments[staffId] = newAssignment;
       positionAssignments[positionId] = assignments;
       return { ...sch, positionAssignments };
     });
@@ -676,7 +685,14 @@
       const positionAssignments = { ...sch.positionAssignments };
       const assignments = { ...positionAssignments[positionId] };
       const prev = assignments[staffId] || { shift: 'AM', daysOff: [6, 0] };
-      assignments[staffId] = { ...prev, daysOff };
+      
+      // Create new assignment with updated days off
+      const newAssignment = { ...prev, daysOff };
+      
+      // Clear manual schedule so they follow the new days off pattern
+      delete newAssignment.manualSchedule;
+      
+      assignments[staffId] = newAssignment;
       positionAssignments[positionId] = assignments;
       return { ...sch, positionAssignments };
     });
@@ -728,9 +744,19 @@
   function updateSimStaff(scheduleId: number, positionId: number, simId: string, field: string, value: any) {
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
-      const simStaff = (s.positionSimStaff[positionId] || []).map(sim => 
-        sim.id === simId ? { ...sim, [field]: value } : sim
-      );
+      const simStaff = (s.positionSimStaff[positionId] || []).map(sim => {
+        if (sim.id !== simId) return sim;
+        
+        // Create updated sim
+        const updated = { ...sim, [field]: value };
+        
+        // If changing team or shift, clear manual schedule
+        if (field === 'team' || field === 'shift') {
+          delete updated.manualSchedule;
+        }
+        
+        return updated;
+      });
       return {
         ...s,
         positionSimStaff: { ...s.positionSimStaff, [positionId]: simStaff }
@@ -744,7 +770,14 @@
       if (s.id !== scheduleId) return s;
       const simStaff = (s.positionSimStaff[positionId] || []).map(sim => {
         if (sim.id !== simId) return sim;
-        return { ...sim, daysOff };
+        
+        // Create updated sim with new days off
+        const updated = { ...sim, daysOff };
+        
+        // Clear manual schedule so they follow the new pattern
+        delete updated.manualSchedule;
+        
+        return updated;
       });
       return {
         ...s,
