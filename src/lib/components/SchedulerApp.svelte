@@ -28,6 +28,17 @@
 
   const dispatch = createEventDispatcher();
 
+  // Track the active schedule tab
+  let activeScheduleId: number | null = null;
+
+  // Set the first schedule as active when schedules change
+  $: if (schedules.length > 0 && (activeScheduleId === null || !schedules.find(s => s.id === activeScheduleId))) {
+    activeScheduleId = schedules[0].id;
+  }
+
+  // Get the active schedule
+  $: activeSchedule = schedules.find(s => s.id === activeScheduleId);
+
   function toInputValue(d: Date) {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -85,36 +96,58 @@
       on:updateSchedule
       on:toggleEditing
     />
+
+    <!-- Schedule Tabs -->
+    {#if schedules.length > 0}
+      <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <h3 class="text-lg font-semibold text-slate-800 mb-4">View Schedule:</h3>
+        <div class="flex flex-wrap gap-2">
+          {#each schedules as schedule (schedule.id)}
+            <button
+              on:click={() => activeScheduleId = schedule.id}
+              class="px-4 py-2 rounded-lg font-medium transition-all duration-200 {activeScheduleId === schedule.id
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}"
+            >
+              {schedule.name}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
     </div>
 
-    {#each schedules as schedule (schedule.id + '-' + (schedule.lastEdited || 0) + '-' + startDate.getTime())}
-      <ScheduleDetail
-        {schedule}
-        {staffPositions}
-        {dates}
-        {days}
-        isEditing={editingOpen[schedule.id]}
-        isCollapsed={collapsedSchedules[schedule.id]}
-        {generateSchedule}
-        {generateScheduleForAssignment}
-        {calculateScheduleCosts}
-        {getDaysOffPattern}
-        on:toggleCollapse
-        on:toggleEditing
-        on:addSimStaff
-        on:deleteSimStaff
-        on:updateSimStaff
-        on:updateAssignment
-        on:toggleScheduleDay
-        on:toggleScheduleDayForSim
-        on:resetManualEdits
-        on:reorderList
-        on:updateDaysOffPattern
-        on:updateSimDaysOffPattern
-        on:updateRequiredCount
-        on:updateSchedule
-      />
-    {/each}
+    <!-- Active Schedule Detail -->
+    {#if activeSchedule}
+      {#key activeSchedule.id + '-' + (activeSchedule.lastEdited || 0) + '-' + startDate.getTime()}
+        <ScheduleDetail
+          schedule={activeSchedule}
+          {staffPositions}
+          {dates}
+          {days}
+          isEditing={editingOpen[activeSchedule.id]}
+          isCollapsed={collapsedSchedules[activeSchedule.id]}
+          {generateSchedule}
+          {generateScheduleForAssignment}
+          {calculateScheduleCosts}
+          {getDaysOffPattern}
+          on:toggleCollapse
+          on:toggleEditing
+          on:addSimStaff
+          on:deleteSimStaff
+          on:updateSimStaff
+          on:updateAssignment
+          on:toggleScheduleDay
+          on:toggleScheduleDayForSim
+          on:resetManualEdits
+          on:reorderList
+          on:updateDaysOffPattern
+          on:updateSimDaysOffPattern
+          on:updateRequiredCount
+          on:updateSchedule
+        />
+      {/key}
+    {/if}
 
     <input
       type="file"
