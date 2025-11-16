@@ -508,8 +508,7 @@
               
               <td class="border border-slate-300 px-3 py-2 sticky left-[3.5rem] bg-white z-20">
                 {#if detail.simulated}
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium">SIM #{idx + 1}</span>
+                  <div class="flex items-center gap-2 mb-1">
                     <span class="text-xs bg-amber-600 text-white px-1.5 py-0.5 rounded flex-shrink-0">SIM</span>
                     <button
                       on:click={() => dispatch('deleteSimStaff', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id })}
@@ -519,6 +518,49 @@
                       <Trash2 class="w-3 h-3" aria-hidden="true" />
                     </button>
                   </div>
+                  
+                  {#if schedule.type === '12-hour'}
+                    <select
+                      class="compact-select w-16 py-0.5 border rounded text-xs focus:ring-1"
+                      style="border-color: {activePosition?.color}; focus:ring-color: {activePosition?.color}"
+                      value={assignment?.team || 'A'}
+                      on:change={(e) => {
+                        const val = (e.currentTarget as HTMLSelectElement).value;
+                        dispatch('updateSimStaff', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id, field: 'team', value: val });
+                      }}
+                    >
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                    </select>
+                  {:else}
+                    <div class="flex gap-1">
+                      <select
+                        class="compact-select w-12 py-0.5 border rounded text-xs focus:ring-1"
+                        style="border-color: {activePosition?.color}"
+                        value={assignment?.shift || 'AM'}
+                        on:change={(e) => {
+                          const val = (e.currentTarget as HTMLSelectElement).value;
+                          dispatch('updateSimStaff', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id, field: 'shift', value: val });
+                        }}
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                      <select
+                        class="compact-select w-20 py-0.5 border rounded text-xs focus:ring-1"
+                        style="border-color: {activePosition?.color}"
+                        value={getDaysOffPattern(assignment?.daysOff || [6, 0])}
+                        on:change={(e) => {
+                          const val = (e.currentTarget as HTMLSelectElement).value;
+                          dispatch('updateSimDaysOffPattern', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id, pattern: val });
+                        }}
+                      >
+                        {#each daysOffOptions as option}
+                          <option value={option.value}>{option.label}</option>
+                        {/each}
+                      </select>
+                    </div>
+                  {/if}
                 {:else}
                   <div class="flex items-center justify-between gap-2 mb-1">
                     <div class="flex items-center gap-2 flex-1 min-w-0">
