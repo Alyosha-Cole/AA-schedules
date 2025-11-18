@@ -1,8 +1,12 @@
 <script lang="ts">
-  import { ChevronDown, ChevronRight, Trash2, Plus, Printer } from 'lucide-svelte';
+  import { ChevronDown, ChevronRight, Trash2, Plus, Printer, Settings } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
+  import AdvancedScheduleSettings from './AdvancedScheduleSettings.svelte';
+  import IndividualStaffSchedule from './IndividualStaffSchedule.svelte';
 
   export let schedule: any;
+  export let schedules: any[] = [];
+  export let activeScheduleId: number | null = null;
   export let staffPositions: any[];
   export let dates: any[];
   export let days: string[];
@@ -30,6 +34,11 @@
   let dragItem: { scheduleId: number; positionId: number; id: string | number } | null = null;
   let dragOverIndex: number | null = null;
   let activePositionId: number | null = null;
+
+  // State for popups
+  let showAdvancedSettings = false;
+  let showIndividualSchedule = false;
+  let selectedStaff: { positionId: number; staffId: number; name: string; positionName: string } | null = null;
 
   $: if (staffPositions.length > 0 && activePositionId === null) {
     activePositionId = staffPositions[0].id;
@@ -102,6 +111,78 @@
       setTimeout(() => scheduleEl.classList.remove('print-target'), 100);
     }
   }
+
+  function openIndividualStaffSchedule(positionId: number, staffId: number, staffName: string, positionName: string) {
+    selectedStaff = { positionId, staffId, name: staffName, positionName };
+    showIndividualSchedule = true;
+  }
+
+  // Get effective time options for a position (handles inheritance)
+  function getEffectiveTimeOptions(positionId: number) {
+    const settings = schedule.advancedSettings?.[positionId];
+    if (!settings) return [];
+    
+    if (settings.inheritFrom !== null && schedule.advancedSettings[settings.inheritFrom]) {
+      return schedule.advancedSettings[settings.inheritFrom].timeOptions;
+    }
+    
+    return settings.timeOptions;
+  }
+
+  // Get the cycl able time options (those with includeInCycle = true)
+  function getCyclableOptions(positionId: number) {
+    const options = getEffectiveTimeOptions(positionId);
+    return options.filter(opt => opt.includeInCycle).sort((a, b) => a.order - b.order);
+  }
+
+  // Get current time option label for a staff member on a specific day
+  function getCurrentTimeLabel(positionId: number, staffId: number, dayIndex: number, working: boolean): string {
+    // Check for individual staff override first
+    const override = schedule.staffScheduleOverrides?.[positionId]?.[staffId]?.[dayIndex];
+    if (override) return override;
+    
+    // Fall back to default based on working status
+    if (working) {
+      const assignment = schedule.positionAssignments?.[positionId]?.[staffId];
+      if (schedule.type === '12-hour') {
+        return '8:30a-8:30p';
+      } else {
+        return assignment?.shift === 'AM' ? '7a-5p' : '1p-11p';
+      }
+    }
+    
+    return 'OFF';
+  }
+
+  // Get current time option object (with color) for a staff member on a specific day
+  function getCurrentTimeOption(positionId: number, staffId: number, dayIndex: number, working: boolean) {
+    const label = getCurrentTimeLabel(positionId, staffId, dayIndex, working);
+    const timeOptions = getEffectiveTimeOptions(positionId);
+    const option = timeOptions.find(opt => opt.label === label);
+    return option || { label, color: working ? '#10b981' : '#ef4444' }; // Default to green if working, red if not
+  }
+
+  // Cycle to next time option
+  function cycleTimeOption(positionId: number, staffId: number, dayIndex: number) {
+    const cyclableOptions = getCyclableOptions(positionId);
+    if (cyclableOptions.length === 0) return;
+    
+    const currentLabel = getCurrentTimeLabel(positionId, staffId, dayIndex, true);
+    const currentIndex = cyclableOptions.findIndex(opt => opt.label === currentLabel);
+    const nextIndex = (currentIndex + 1) % cyclableOptions.length;
+    const nextOption = cyclableOptions[nextIndex];
+    
+    // Initialize structure if needed
+    if (!schedule.staffScheduleOverrides) schedule.staffScheduleOverrides = {};
+    if (!schedule.staffScheduleOverrides[positionId]) schedule.staffScheduleOverrides[positionId] = {};
+    if (!schedule.staffScheduleOverrides[positionId][staffId]) schedule.staffScheduleOverrides[positionId][staffId] = {};
+    
+    // Set the override
+    schedule.staffScheduleOverrides[positionId][staffId][dayIndex] = nextOption.label;
+    
+    // Trigger reactivity
+    schedule = schedule;
+  }
 </script>
 
 <style>
@@ -120,6 +201,14 @@
   
   .dragging {
     opacity: 0.5;
+  }
+
+  /* Prevent text selection when clicking schedule cells */
+  .schedule-cell {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
   }
 
   @media print {
@@ -257,6 +346,25 @@
   }
 </style>
 
+<!-- Schedule Toggler Section - Shows which schedule you're viewing -->
+{#if schedules.length > 1}
+  <div class="bg-white rounded-xl shadow-lg p-6 mb-6 print:hidden">
+    <h3 class="text-lg font-semibold text-slate-800 mb-4">Currently Viewing:</h3>
+    <div class="flex flex-wrap gap-2">
+      {#each schedules as sched (sched.id)}
+        <button
+          on:click={() => dispatch('setActiveSchedule', sched.id)}
+          class="px-4 py-2 rounded-lg font-medium transition-all duration-200 {activeScheduleId === sched.id
+            ? 'bg-blue-600 text-white shadow-md'
+            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}"
+        >
+          {sched.name}
+        </button>
+      {/each}
+    </div>
+  </div>
+{/if}
+
 <div class="bg-white rounded-lg shadow-lg p-6 mb-6" data-schedule-id="{schedule.id}">
   <div class="flex items-center justify-between mb-4 pb-4 border-b-2 border-slate-200">
     <div class="flex items-center gap-3">
@@ -279,6 +387,14 @@
         aria-label="Print schedule"
       >
         <Printer class="w-6 h-6 text-blue-600" aria-hidden="true" />
+      </button>
+      <button
+        on:click={() => showAdvancedSettings = true}
+        class="p-2 hover:bg-purple-50 rounded transition-colors print:hidden"
+        title="Advanced Schedule Settings"
+        aria-label="Advanced schedule settings"
+      >
+        <Settings class="w-6 h-6 text-purple-600" aria-hidden="true" />
       </button>
       
       <div class="flex flex-col gap-1">
@@ -490,18 +606,18 @@
             {@const isDropTarget = dragOverIndex === idx}
             
             <tr 
-              class={`hover:bg-slate-50 ${detail.simulated ? 'bg-amber-50' : ''} cursor-grab active:cursor-grabbing ${isDragging ? 'dragging' : ''} ${isDropTarget ? 'drag-over' : ''}`}
+              class={`hover:bg-slate-50 ${detail.simulated ? 'bg-amber-50' : ''} ${isDragging ? 'dragging' : ''} ${isDropTarget ? 'drag-over' : ''}`}
               style="background-color: {!detail.simulated && activePosition ? `${activePosition.color}10` : ''}"
-              draggable="true"
-              on:dragstart={(e) => onDragStartRow(schedule.id, activePositionId, detail.id, e)}
               on:dragover={(e) => onDragOverRow(idx, e)}
               on:dragleave={onDragLeaveRow}
               on:drop={(e) => onDropRow(schedule.id, activePositionId, detail.id, e)}
               on:dragend={onDragEndRow}
             >
               <td 
-                class="border border-slate-300 px-3 py-2 font-medium sticky left-0 bg-white w-14 text-right z-20"
+                class="border border-slate-300 px-3 py-2 font-medium sticky left-0 bg-white w-14 text-right z-20 cursor-grab active:cursor-grabbing"
                 style="color: {activePosition?.color}"
+                draggable="true"
+                on:dragstart={(e) => onDragStartRow(schedule.id, activePositionId, detail.id, e)}
               >
                 {idx + 1}.
               </td>
@@ -564,7 +680,12 @@
                 {:else}
                   <div class="flex items-center justify-between gap-2 mb-1">
                     <div class="flex items-center gap-2 flex-1 min-w-0">
-                      <span class="font-medium truncate">{detail.name}</span>
+                      <button
+                        on:click={() => openIndividualStaffSchedule(activePositionId, detail.id, detail.name, activePosition?.name || '')}
+                        class="font-medium truncate hover:text-blue-600 hover:underline cursor-pointer text-left"
+                      >
+                        {detail.name}
+                      </button>
                     </div>
                   </div>
                   
@@ -614,24 +735,23 @@
               </td>
 
               {#each detail.schedule as working, dIdx}
+                {@const timeOption = getCurrentTimeOption(activePositionId, detail.id, dIdx, working)}
+                {@const currentLabel = timeOption.label}
+                {@const cellColor = timeOption.color}
                 <td
-                  class={`border border-slate-300 px-1 py-2 text-center cursor-pointer transition-colors ${
-                    working ? 'bg-green-100 hover:bg-green-200' : 'bg-red-50 hover:bg-red-100'
-                  }`}
-                  title={`Click to toggle ${dates[dIdx].dayName} (${working ? 'ON' : 'OFF'})`}
+                  class={`schedule-cell border border-slate-300 px-1 py-2 text-center cursor-pointer transition-colors`}
+                  style="background-color: {cellColor}33; border-color: {cellColor};"
+                  title={`Click to cycle ${dates[dIdx].dayName} (${currentLabel})`}
                   on:click={() => {
                     if (String(detail.id).startsWith('sim-')) {
                       dispatch('toggleScheduleDayForSim', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id, dayIndex: dIdx });
                     } else {
-                      dispatch('toggleScheduleDay', { scheduleId: schedule.id, positionId: activePositionId, staffId: detail.id, dayIndex: dIdx });
+                      // Use new cycling logic
+                      cycleTimeOption(activePositionId, detail.id, dIdx);
                     }
                   }}
                 >
-                  {#if working}
-                    <div class="text-xs font-semibold text-green-800">{shiftLabel}</div>
-                  {:else}
-                    <div class="text-xs text-red-600">OFF</div>
-                  {/if}
+                  <div class="text-xs font-semibold" style="color: {cellColor};">{currentLabel}</div>
                 </td>
               {/each}
 
@@ -824,4 +944,41 @@
       </table>
     </div>
   </div>
+
+  <!-- Advanced Settings Popup -->
+  {#if showAdvancedSettings}
+    <AdvancedScheduleSettings
+      {schedule}
+      {staffPositions}
+      on:close={() => showAdvancedSettings = false}
+      on:settingsChanged={() => {
+        schedule = schedule;
+        dispatch('scheduleUpdated', schedule);
+      }}
+    />
+  {/if}
+
+  <!-- Individual Staff Schedule Popup -->
+  {#if showIndividualSchedule && selectedStaff}
+    <IndividualStaffSchedule
+      {schedule}
+      {days}
+      {dates}
+      positionId={selectedStaff.positionId}
+      staffId={selectedStaff.staffId}
+      staffName={selectedStaff.name}
+      positionName={selectedStaff.positionName}
+      on:close={() => {
+        showIndividualSchedule = false;
+        selectedStaff = null;
+      }}
+      on:scheduleChanged={() => {
+        schedule = schedule;
+        dispatch('scheduleUpdated', schedule);
+      }}
+      on:save={() => {
+        dispatch('scheduleUpdated', schedule);
+      }}
+    />
+  {/if}
 </div>

@@ -45,6 +45,10 @@
     const dd = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${dd}`;
   }
+  
+  function handleSetActiveSchedule(event: CustomEvent<number>) {
+    activeScheduleId = event.detail;
+  }
 </script>
 
 <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 print:p-0 print:bg-white">
@@ -96,25 +100,6 @@
       on:updateSchedule
       on:toggleEditing
     />
-
-    <!-- Schedule Tabs -->
-    {#if schedules.length > 0}
-      <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-        <h3 class="text-lg font-semibold text-slate-800 mb-4">View Schedule:</h3>
-        <div class="flex flex-wrap gap-2">
-          {#each schedules as schedule (schedule.id)}
-            <button
-              on:click={() => activeScheduleId = schedule.id}
-              class="px-4 py-2 rounded-lg font-medium transition-all duration-200 {activeScheduleId === schedule.id
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}"
-            >
-              {schedule.name}
-            </button>
-          {/each}
-        </div>
-      </div>
-    {/if}
     </div>
 
     <!-- Active Schedule Detail -->
@@ -122,6 +107,8 @@
       {#key activeSchedule.id + '-' + (activeSchedule.lastEdited || 0) + '-' + startDate.getTime()}
         <ScheduleDetail
           schedule={activeSchedule}
+          {schedules}
+          {activeScheduleId}
           {staffPositions}
           {dates}
           {days}
@@ -145,6 +132,7 @@
           on:updateSimDaysOffPattern
           on:updateRequiredCount
           on:updateSchedule
+          on:setActiveSchedule={handleSetActiveSchedule}
         />
       {/key}
     {/if}
