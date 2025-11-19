@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronDown, ChevronRight, Trash2, Plus, Printer, Settings } from 'lucide-svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
   import AdvancedScheduleSettings from './AdvancedScheduleSettings.svelte';
   import IndividualStaffSchedule from './IndividualStaffSchedule.svelte';
 
@@ -32,6 +32,7 @@
   ];
 
   let dragItem: { scheduleId: number; positionId: number; id: string | number } | null = null;
+  let forceUpdateCounter = 0;  // Force update counter
   let dragOverIndex: number | null = null;
   let activePositionId: number | null = null;
 
@@ -46,7 +47,7 @@
 
   $: activePosition = staffPositions.find(p => p.id === activePositionId);
   $: activeDetails = costs.positionDetails[activePositionId] || [];
-  $: renderKey = activePositionId + '-' + JSON.stringify(schedule.staffScheduleOverrides || {});  // Force re-render
+  $: renderKey = activePositionId + '-' + forceUpdateCounter + '-' + JSON.stringify(schedule.staffScheduleOverrides || {});
   $: activeCoverage = costs.positionCoverage[activePositionId] || { dailyCoverage: [], amCoverage: [], pmCoverage: [] };
   $: activeRequired = schedule.requiredCounts[activePositionId] || { day12: 0, am: 0, pm: 0 };
 
@@ -169,18 +170,36 @@
   function getCurrentTimeLabel(positionId: number, staffId: number, dayIndex: number, working: boolean): string {
     // Check for individual staff override first
     const override = schedule.staffScheduleOverrides?.[positionId]?.[staffId]?.[dayIndex];
-    if (override) return override;
+    
+    console.log('getCurrentTimeLabel:', {
+      positionId,
+      staffId,
+      dayIndex,
+      working,
+      hasOverride: !!override,
+      overrideValue: override,
+      willReturn: override || (working ? (schedule.type === '12-hour' ? '8:30a-8:30p' : 'shift-based') : 'OFF')
+    });
+    
+    if (override) {
+      console.log('  → Returning override:', override);
+      return override;
+    }
     
     // Fall back to default based on working status
     if (working) {
       const assignment = schedule.positionAssignments?.[positionId]?.[staffId];
       if (schedule.type === '12-hour') {
+        console.log('  → Returning 12-hour default: 8:30a-8:30p');
         return '8:30a-8:30p';
       } else {
-        return assignment?.shift === 'AM' ? '7a-5p' : '1p-11p';
+        const label = assignment?.shift === 'AM' ? '7a-5p' : '1p-11p';
+        console.log('  → Returning shift-based default:', label);
+        return label;
       }
     }
     
+    console.log('  → Returning OFF (not working)');
     return 'OFF';
   }
 
@@ -188,6 +207,7 @@
   // Returns fresh object EVERY time with explicit color string
   function getCurrentTimeOption(positionId: number, staffId: number, dayIndex: number, working: boolean) {
     const label = getCurrentTimeLabel(positionId, staffId, dayIndex, working);
+    console.log(`getCurrentTimeOption called: pos=${positionId} staff=${staffId} day=${dayIndex} label=${label}`);
     const timeOptions = getEffectiveTimeOptions(positionId);
     const option = timeOptions.find(opt => opt.label === label);
     
@@ -215,8 +235,8 @@
     };
   }
 
-  // Cycle to next time option - AGGRESSIVE REACTIVITY VERSION
-  function cycleTimeOption(positionId: number, staffId: number, dayIndex: number) {
+  // Cycle to next time option - ULTRA AGGRESSIVE VERSION
+  function cycleTimeOption(positionId: number, staffId: number, dayIndex: number, working: boolean) {
     const cyclableOptions = getCyclableOptions(positionId);
     
     console.log('=== CYCLE START ===', { positionId, staffId, dayIndex, cyclableCount: cyclableOptions.length });
@@ -226,68 +246,101 @@
       return;
     }
     
-    // Get staff's current schedule
-    const assignment = schedule.positionAssignments?.[positionId]?.[staffId];
-    if (!assignment) {
-      console.warn('No assignment found');
-      return;
-    }
+    // Use the working status passed from the cell (already computed correctly)
+    console.log('cycleTimeOption called with working:', working);
     
-    const staffSchedule = assignment.manualSchedule || [];
-    const isWorking = staffSchedule[dayIndex];
-    
-    // Get current label
-    const currentLabel = getCurrentTimeLabel(positionId, staffId, dayIndex, isWorking);
+    // Get current label using the correct working status
+    const currentLabel = getCurrentTimeLabel(positionId, staffId, dayIndex, working);
     
     // Find in cyclable options
     let currentIndexInCycle = cyclableOptions.findIndex(opt => opt.label === currentLabel);
     
-    // Calculate next
-    let nextIndexInCycle = currentIndexInCycle === -1 ? 0 : (currentIndexInCycle + 1) % cyclableOptions.length;
-    const nextOption = cyclableOptions[nextIndexInCycle];
-    
-    console.log('Cycling:', {
+    console.log('BEFORE cycle:', {
       currentLabel,
       currentIndexInCycle,
-      nextIndexInCycle,
-      nextLabel: nextOption.label,
-      cyclableLabels: cyclableOptions.map(o => o.label)
+      cyclableLabels: cyclableOptions.map(o => o.label),
+      hasOverride: !!schedule.staffScheduleOverrides?.[positionId]?.[staffId]?.[dayIndex]
     });
     
-    // Initialize deeply if needed
-    if (!schedule.staffScheduleOverrides) {
-      schedule.staffScheduleOverrides = {};
-    }
-    if (!schedule.staffScheduleOverrides[positionId]) {
-      schedule.staffScheduleOverrides[positionId] = {};
-    }
-    if (!schedule.staffScheduleOverrides[positionId][staffId]) {
-      schedule.staffScheduleOverrides[positionId][staffId] = {};
-    }
+    // Calculate next
+    let nextIndexInCycle = currentIndexInCycle === -1 ? 0 : (currentIndexInCycle + 1) % cyclableOptions.length;
     
-    // Set the override
-    schedule.staffScheduleOverrides[positionId][staffId][dayIndex] = nextOption.label;
+    console.log('Index calculation:', {
+      currentIndexInCycle,
+      cyclableLength: cyclableOptions.length,
+      nextIndexInCycle,
+      mathCheck: `(${currentIndexInCycle} + 1) % ${cyclableOptions.length} = ${nextIndexInCycle}`
+    });
     
-    console.log('Set override:', nextOption.label, 'at position', positionId, 'staff', staffId, 'day', dayIndex);
+    const nextOption = cyclableOptions[nextIndexInCycle];
     
-    // SUPER AGGRESSIVE REACTIVITY - Create entirely new object
-    schedule = {
-      ...schedule,
-      staffScheduleOverrides: {
-        ...schedule.staffScheduleOverrides,
-        [positionId]: {
-          ...schedule.staffScheduleOverrides[positionId],
-          [staffId]: {
-            ...schedule.staffScheduleOverrides[positionId][staffId]
-          }
-        }
-      }
+    console.log('Got next option from array:', {
+      nextIndexInCycle,
+      nextOption: nextOption,
+      nextLabel: nextOption?.label || 'UNDEFINED',
+      arrayLength: cyclableOptions.length,
+      wholeArray: cyclableOptions.map((o, i) => `[${i}]: ${o.label}`)
+    });
+    
+    // CRITICAL: Create the ENTIRE structure fresh, even if it exists
+    const newOverrides = {
+      ...schedule.staffScheduleOverrides
     };
     
-    console.log('=== CYCLE END ===', 'New schedule created');
+    if (!newOverrides[positionId]) {
+      newOverrides[positionId] = {};
+    } else {
+      newOverrides[positionId] = { ...newOverrides[positionId] };
+    }
     
-    // Dispatch with the schedule
+    if (!newOverrides[positionId][staffId]) {
+      newOverrides[positionId][staffId] = {};
+    } else {
+      newOverrides[positionId][staffId] = { ...newOverrides[positionId][staffId] };
+    }
+    
+    // Set the new value - with extra validation
+    const labelToSet = String(nextOption.label);  // Force string copy
+    console.log('About to set override:', {
+      position: positionId,
+      staff: staffId, 
+      day: dayIndex,
+      labelToSet: labelToSet,
+      typeOfLabel: typeof labelToSet
+    });
+    newOverrides[positionId][staffId][dayIndex] = labelToSet;
+    
+    console.log('Setting override:', {
+      position: positionId,
+      staff: staffId,
+      day: dayIndex,
+      value: nextOption.label
+    });
+    
+    // SUPER AGGRESSIVE: Create completely new schedule object
+    const newSchedule = {
+      ...schedule,
+      staffScheduleOverrides: newOverrides
+    };
+    
+    // Update the schedule reference
+    schedule = newSchedule;
+    
+    console.log('=== CYCLE END ===', 'Schedule updated, override set to:', nextOption.label);
+    
+    // NUCLEAR OPTION: Force immediate re-render FIRST
+    forceUpdateCounter++;
+    
+    // Force dispatch
     dispatch('scheduleUpdated', schedule);
+    
+    // Use tick SYNCHRONOUSLY to ensure immediate DOM update
+    // We don't await because we want this to be non-blocking
+    Promise.resolve().then(() => tick()).then(() => tick()).then(() => {
+      console.log('DOM updated after double tick');
+      // Force one more update just to be sure
+      forceUpdateCounter = forceUpdateCounter + 0.0001;
+    });
   }
 </script>
 
@@ -840,7 +893,7 @@
                 {/if}
               </td>
 
-              {#each detail.schedule as working, dIdx (activePositionId + '-' + detail.id + '-' + dIdx)}
+              {#each detail.schedule as working, dIdx (forceUpdateCounter + '-' + activePositionId + '-' + detail.id + '-' + dIdx)}
                 {@const timeOption = getCurrentTimeOption(activePositionId, detail.id, dIdx, working)}
                 {@const currentLabel = timeOption?.label || 'OFF'}
                 {@const cellColor = timeOption?.color || '#dc2626'}
@@ -852,8 +905,8 @@
                     if (String(detail.id).startsWith('sim-')) {
                       dispatch('toggleScheduleDayForSim', { scheduleId: schedule.id, positionId: activePositionId, simId: detail.id, dayIndex: dIdx });
                     } else {
-                      // Use new cycling logic
-                      cycleTimeOption(activePositionId, detail.id, dIdx);
+                      // Use new cycling logic - pass the working status from the cell
+                      cycleTimeOption(activePositionId, detail.id, dIdx, working);
                     }
                   }}
                 >
