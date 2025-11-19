@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { X, Plus, Trash2, GripVertical } from 'lucide-svelte';
 
   export let schedule: any;
@@ -7,88 +7,136 @@
 
   const dispatch = createEventDispatcher();
 
+  // Professional color palette
+  const COLOR_PALETTE = [
+    '#16a34a', // green-600
+    '#2563eb', // blue-600
+    '#9333ea', // purple-600
+    '#ea580c', // orange-600
+    '#0891b2', // cyan-600
+    '#4f46e5', // indigo-600
+    '#c026d3', // fuchsia-600
+    '#84cc16', // lime-500
+  ];
+
+  const DEFAULT_COLORS = {
+    'off': '#dc2626',
+    'pto': '#f59e0b',
+    '830a-830p': '#16a34a',
+    '8:30a-8:30p': '#16a34a',
+    '7a-5p': '#16a34a',
+    '1p-11p': '#2563eb'
+  };
+
   let selectedPositionId: number | null = null;
   let draggedItem: { positionId: number; optionId: string } | null = null;
   let dragOverId: string | null = null;
+  let colorIndex = 0;
 
-  // Initialize selectedPositionId to first position
-  $: if (staffPositions.length > 0 && selectedPositionId === null) {
-    selectedPositionId = staffPositions[0].id;
-  }
-
-  $: selectedPosition = staffPositions.find(p => p.id === selectedPositionId);
-  $: isFirstPosition = selectedPositionId === staffPositions[0]?.id;
-
-  // Get default time options based on schedule type
-  function getDefaultTimeOptions(scheduleType: string): Array<any> {
+  // Get default time options for a schedule type
+  function getDefaultTimeOptions(scheduleType: string) {
     const baseOptions = [
-      { id: 'off', label: 'OFF', includeInCycle: true, order: 0, isFixed: true, color: '#ef4444' }, // red
-      { id: 'pto', label: 'PTO', includeInCycle: false, order: 1, isFixed: true, color: '#f59e0b' } // amber
+      { id: 'off', label: 'OFF', includeInCycle: true, order: 0, isFixed: true, color: '#dc2626' },
+      { id: 'pto', label: 'PTO', includeInCycle: false, order: 1, isFixed: true, color: '#f59e0b' }
     ];
 
     if (scheduleType === '12-hour') {
       return [
         ...baseOptions,
-        { id: '830a-830p', label: '8:30a-8:30p', includeInCycle: true, order: 2, isFixed: false, color: '#10b981' } // green
+        { id: '830a-830p', label: '8:30a-8:30p', includeInCycle: true, order: 2, isFixed: false, color: '#16a34a' }
       ];
-    } else { // 10-hour
+    } else {
       return [
         ...baseOptions,
-        { id: '7a-5p', label: '7a-5p', includeInCycle: true, order: 2, isFixed: false, color: '#10b981' }, // green
-        { id: '1p-11p', label: '1p-11p', includeInCycle: true, order: 3, isFixed: false, color: '#3b82f6' } // blue
+        { id: '7a-5p', label: '7a-5p', includeInCycle: true, order: 2, isFixed: false, color: '#16a34a' },
+        { id: '1p-11p', label: '1p-11p', includeInCycle: true, order: 3, isFixed: false, color: '#2563eb' }
       ];
     }
   }
 
-  // Initialize advanced settings if not present
-  $: {
+  // Initialize on mount to avoid reactive conflicts
+  onMount(() => {
+    initializeAdvancedSettings();
+    if (staffPositions.length > 0 && selectedPositionId === null) {
+      selectedPositionId = staffPositions[0].id;
+    }
+  });
+
+  function initializeAdvancedSettings() {
     if (!schedule.advancedSettings) {
       schedule.advancedSettings = {};
     }
-    
-    // Initialize each position if not present
+
+    let needsSave = false;
+
     for (const position of staffPositions) {
       if (!schedule.advancedSettings[position.id]) {
         schedule.advancedSettings[position.id] = {
           inheritFrom: null,
           timeOptions: getDefaultTimeOptions(schedule.type)
         };
+        needsSave = true;
+      } else {
+        // Ensure all options have colors
+        const options = schedule.advancedSettings[position.id].timeOptions;
+        for (let i = 0; i < options.length; i++) {
+          const opt = options[i];
+          if (!opt.color) {
+            opt.color = DEFAULT_COLORS[opt.id] || DEFAULT_COLORS[opt.label] || COLOR_PALETTE[i % COLOR_PALETTE.length];
+            needsSave = true;
+          }
+        }
       }
     }
-  }
 
-  $: currentSettings = selectedPositionId ? schedule.advancedSettings[selectedPositionId] : null;
-  $: availablePositions = staffPositions.filter(p => p.id !== selectedPositionId);
-
-  // Get the effective time options (either own or inherited)
-  function getEffectiveTimeOptions(positionId: number) {
-    const settings = schedule.advancedSettings[positionId];
-    if (!settings) return [];
-    
-    if (settings.inheritFrom !== null && schedule.advancedSettings[settings.inheritFrom]) {
-      return schedule.advancedSettings[settings.inheritFrom].timeOptions;
-    }
-    
-    return settings.timeOptions;
-  }
-
-  $: effectiveTimeOptions = selectedPositionId ? getEffectiveTimeOptions(selectedPositionId) : [];
-  $: isInheriting = currentSettings?.inheritFrom !== null;
-
-  function handleInheritChange(e: Event) {
-    const value = (e.target as HTMLSelectElement).value;
-    if (currentSettings) {
-      currentSettings.inheritFrom = value === 'none' ? null : parseInt(value);
+    if (needsSave) {
+      schedule = schedule;
       dispatch('settingsChanged');
     }
   }
 
+  // Reactive declarations - carefully ordered
+  $: currentSettings = selectedPositionId && schedule.advancedSettings ? schedule.advancedSettings[selectedPositionId] : null;
+  $: availablePositions = staffPositions.filter(p => p.id !== selectedPositionId);
+  $: isInheriting = currentSettings?.inheritFrom !== null;
+  
+  // Get effective options (handles inheritance)
+  $: effectiveOptions = (() => {
+    if (!currentSettings) return [];
+    if (isInheriting && schedule.advancedSettings[currentSettings.inheritFrom]) {
+      return schedule.advancedSettings[currentSettings.inheritFrom].timeOptions || [];
+    }
+    return currentSettings.timeOptions || [];
+  })();
+
+  // Sort options by order
+  $: sortedOptions = [...effectiveOptions].sort((a, b) => a.order - b.order);
+
+  $: isFirstPosition = selectedPositionId === staffPositions[0]?.id;
+
+  // Helper to trigger full reactivity
+  function saveChanges() {
+    schedule = { ...schedule };
+    dispatch('settingsChanged');
+  }
+
+  function handleInheritChange(e: Event) {
+    const value = (e.target as HTMLSelectElement).value;
+    if (currentSettings && selectedPositionId) {
+      const newInheritFrom = value === 'none' ? null : parseInt(value);
+      schedule.advancedSettings[selectedPositionId] = {
+        ...currentSettings,
+        inheritFrom: newInheritFrom
+      };
+      saveChanges();
+    }
+  }
+
   function addTimeOption() {
-    if (!currentSettings || isInheriting) return;
+    if (!currentSettings || isInheriting || !selectedPositionId) return;
     
-    // Generate a random color for new options
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    const nextColor = COLOR_PALETTE[colorIndex % COLOR_PALETTE.length];
+    colorIndex++;
     
     const newOption = {
       id: `custom-${Date.now()}`,
@@ -96,59 +144,101 @@
       includeInCycle: true,
       order: currentSettings.timeOptions.length,
       isFixed: false,
-      color: randomColor
+      color: nextColor
     };
     
-    currentSettings.timeOptions = [...currentSettings.timeOptions, newOption];
-    dispatch('settingsChanged');
+    schedule.advancedSettings[selectedPositionId] = {
+      ...currentSettings,
+      timeOptions: [...currentSettings.timeOptions, newOption]
+    };
+    
+    saveChanges();
   }
 
   function deleteTimeOption(optionId: string) {
-    if (!currentSettings || isInheriting) return;
+    if (!currentSettings || isInheriting || !selectedPositionId) return;
     
-    currentSettings.timeOptions = currentSettings.timeOptions.filter(opt => opt.id !== optionId);
-    // Reorder
-    currentSettings.timeOptions.forEach((opt, idx) => opt.order = idx);
-    dispatch('settingsChanged');
+    const filteredOptions = currentSettings.timeOptions.filter(opt => opt.id !== optionId);
+    filteredOptions.forEach((opt, idx) => opt.order = idx);
+    
+    schedule.advancedSettings[selectedPositionId] = {
+      ...currentSettings,
+      timeOptions: filteredOptions
+    };
+    
+    saveChanges();
   }
 
   function updateOptionLabel(optionId: string, newLabel: string) {
-    if (!currentSettings || isInheriting) return;
+    if (!currentSettings || isInheriting || !selectedPositionId) return;
     
-    const option = currentSettings.timeOptions.find(opt => opt.id === optionId);
-    if (option) {
-      option.label = newLabel;
-      // Reset inherit if any change is made
-      currentSettings.inheritFrom = null;
-      dispatch('settingsChanged');
-    }
+    const updatedOptions = currentSettings.timeOptions.map(opt =>
+      opt.id === optionId ? { ...opt, label: newLabel } : opt
+    );
+    
+    schedule.advancedSettings[selectedPositionId] = {
+      ...currentSettings,
+      timeOptions: updatedOptions,
+      inheritFrom: null
+    };
+    
+    saveChanges();
   }
 
   function updateOptionColor(optionId: string, newColor: string) {
-    if (!currentSettings || isInheriting) return;
+    if (!currentSettings || isInheriting || !selectedPositionId) return;
     
-    const option = currentSettings.timeOptions.find(opt => opt.id === optionId);
-    if (option) {
-      option.color = newColor;
-      // Reset inherit if any change is made
-      currentSettings.inheritFrom = null;
-      dispatch('settingsChanged');
-    }
+    console.log('Updating color for position', selectedPositionId, 'option', optionId, 'to', newColor);
+    
+    const updatedOptions = currentSettings.timeOptions.map(opt =>
+      opt.id === optionId ? { 
+        id: opt.id,
+        label: opt.label,
+        includeInCycle: opt.includeInCycle,
+        order: opt.order,
+        isFixed: opt.isFixed,
+        color: String(newColor) // Force string copy
+      } : {
+        id: opt.id,
+        label: opt.label,
+        includeInCycle: opt.includeInCycle,
+        order: opt.order,
+        isFixed: opt.isFixed,
+        color: String(opt.color) // Force string copy
+      }
+    );
+    
+    // Completely replace the advancedSettings for this position
+    schedule.advancedSettings = {
+      ...schedule.advancedSettings,
+      [selectedPositionId]: {
+        inheritFrom: null,
+        timeOptions: updatedOptions
+      }
+    };
+    
+    console.log('Updated advancedSettings for position', selectedPositionId);
+    
+    saveChanges();
   }
 
   function toggleIncludeInCycle(optionId: string) {
-    if (!currentSettings || isInheriting) return;
+    if (!currentSettings || isInheriting || !selectedPositionId) return;
     
-    const option = currentSettings.timeOptions.find(opt => opt.id === optionId);
-    if (option) {
-      option.includeInCycle = !option.includeInCycle;
-      // Reset inherit if any change is made
-      currentSettings.inheritFrom = null;
-      dispatch('settingsChanged');
-    }
+    const updatedOptions = currentSettings.timeOptions.map(opt =>
+      opt.id === optionId ? { ...opt, includeInCycle: !opt.includeInCycle } : opt
+    );
+    
+    schedule.advancedSettings[selectedPositionId] = {
+      ...currentSettings,
+      timeOptions: updatedOptions,
+      inheritFrom: null
+    };
+    
+    saveChanges();
   }
 
-  // Drag and drop handlers
+  // Drag handlers
   function onDragStart(positionId: number, optionId: string, e: DragEvent) {
     if (isInheriting) return;
     draggedItem = { positionId, optionId };
@@ -170,26 +260,36 @@
     e.preventDefault();
     dragOverId = null;
     
-    if (!draggedItem || !currentSettings || isInheriting) return;
-    if (draggedItem.positionId !== selectedPositionId) return;
-    if (draggedItem.optionId === targetOptionId) return;
+    if (!draggedItem || !currentSettings || isInheriting || !selectedPositionId) {
+      draggedItem = null;
+      return;
+    }
+    
+    if (draggedItem.positionId !== selectedPositionId || draggedItem.optionId === targetOptionId) {
+      draggedItem = null;
+      return;
+    }
     
     const fromIndex = currentSettings.timeOptions.findIndex(opt => opt.id === draggedItem.optionId);
     const toIndex = currentSettings.timeOptions.findIndex(opt => opt.id === targetOptionId);
     
-    if (fromIndex === -1 || toIndex === -1) return;
+    if (fromIndex === -1 || toIndex === -1) {
+      draggedItem = null;
+      return;
+    }
     
-    const newOptions = [...currentSettings.timeOptions];
-    const [movedItem] = newOptions.splice(fromIndex, 1);
-    newOptions.splice(toIndex, 0, movedItem);
+    const reorderedOptions = [...currentSettings.timeOptions];
+    const [movedItem] = reorderedOptions.splice(fromIndex, 1);
+    reorderedOptions.splice(toIndex, 0, movedItem);
+    reorderedOptions.forEach((opt, idx) => opt.order = idx);
     
-    // Update order
-    newOptions.forEach((opt, idx) => opt.order = idx);
-    currentSettings.timeOptions = newOptions;
+    schedule.advancedSettings[selectedPositionId] = {
+      ...currentSettings,
+      timeOptions: reorderedOptions,
+      inheritFrom: null
+    };
     
-    // Reset inherit
-    currentSettings.inheritFrom = null;
-    dispatch('settingsChanged');
+    saveChanges();
     draggedItem = null;
   }
 
@@ -230,7 +330,7 @@
         </select>
       </div>
 
-      {#if selectedPosition && currentSettings}
+      {#if currentSettings}
         <!-- Inherit From Dropdown -->
         {#if !isFirstPosition}
           <div class="mb-6 p-4 bg-slate-50 rounded-lg">
@@ -273,11 +373,12 @@
           </div>
 
           <div class="space-y-2">
-            {#each effectiveTimeOptions.sort((a, b) => a.order - b.order) as option (option.id)}
+            {#each sortedOptions as option (option.id)}
+              {@const isDragging = draggedItem?.optionId === option.id}
               <div
-                class="flex items-center gap-3 p-3 border border-slate-300 rounded-lg bg-white {dragOverId === option.id ? 'border-blue-500 bg-blue-50' : ''}"
+                class="flex items-center gap-3 p-3 border border-slate-300 rounded-lg bg-white transition-all {dragOverId === option.id ? 'border-blue-500 bg-blue-50' : ''} {isDragging ? 'opacity-50' : ''}"
                 draggable={!isInheriting}
-                on:dragstart={(e) => onDragStart(selectedPositionId!, option.id, e)}
+                on:dragstart={(e) => onDragStart(selectedPositionId, option.id, e)}
                 on:dragover={(e) => onDragOver(option.id, e)}
                 on:dragleave={onDragLeave}
                 on:drop={(e) => onDrop(option.id, e)}
@@ -293,7 +394,7 @@
                 <!-- Color Picker -->
                 <input
                   type="color"
-                  value={option.color || '#3b82f6'}
+                  value={option.color}
                   on:input={(e) => updateOptionColor(option.id, e.currentTarget.value)}
                   disabled={isInheriting}
                   class="w-10 h-10 rounded border border-slate-300 cursor-pointer disabled:cursor-not-allowed"
@@ -338,7 +439,7 @@
             {/each}
           </div>
 
-          {#if !isInheriting && effectiveTimeOptions.length === 0}
+          {#if !isInheriting && sortedOptions.length === 0}
             <p class="text-sm text-slate-500 text-center py-4">
               No time options defined. Click "Add Option" to create one.
             </p>
@@ -369,10 +470,3 @@
     </div>
   </div>
 </div>
-
-<style>
-  /* Prevent text selection while dragging */
-  :global(.dragging) {
-    opacity: 0.5;
-  }
-</style>

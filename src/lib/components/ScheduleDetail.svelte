@@ -46,6 +46,7 @@
 
   $: activePosition = staffPositions.find(p => p.id === activePositionId);
   $: activeDetails = costs.positionDetails[activePositionId] || [];
+  $: renderKey = activePositionId + '-' + JSON.stringify(schedule.staffScheduleOverrides || {});  // Force re-render
   $: activeCoverage = costs.positionCoverage[activePositionId] || { dailyCoverage: [], amCoverage: [], pmCoverage: [] };
   $: activeRequired = schedule.requiredCounts[activePositionId] || { day12: 0, am: 0, pm: 0 };
 
@@ -118,15 +119,44 @@
   }
 
   // Get effective time options for a position (handles inheritance)
+  // ULTRA DEFENSIVE - Returns completely independent copies with color isolation
   function getEffectiveTimeOptions(positionId: number) {
-    const settings = schedule.advancedSettings?.[positionId];
-    if (!settings) return [];
-    
-    if (settings.inheritFrom !== null && schedule.advancedSettings[settings.inheritFrom]) {
-      return schedule.advancedSettings[settings.inheritFrom].timeOptions;
+    if (!schedule.advancedSettings || !schedule.advancedSettings[positionId]) {
+      // Return defaults
+      const defaults = [
+        { id: 'off', label: 'OFF', includeInCycle: true, order: 0, isFixed: true, color: '#dc2626' },
+        { id: 'pto', label: 'PTO', includeInCycle: false, order: 1, isFixed: true, color: '#f59e0b' }
+      ];
+      
+      if (schedule.type === '12-hour') {
+        defaults.push({ id: '830a-830p', label: '8:30a-8:30p', includeInCycle: true, order: 2, isFixed: false, color: '#16a34a' });
+      } else {
+        defaults.push({ id: '7a-5p', label: '7a-5p', includeInCycle: true, order: 2, isFixed: false, color: '#16a34a' });
+        defaults.push({ id: '1p-11p', label: '1p-11p', includeInCycle: true, order: 3, isFixed: false, color: '#2563eb' });
+      }
+      
+      return defaults;
     }
     
-    return settings.timeOptions;
+    const settings = schedule.advancedSettings[positionId];
+    
+    // Get source options
+    let sourceOptions;
+    if (settings.inheritFrom !== null && schedule.advancedSettings[settings.inheritFrom]) {
+      sourceOptions = schedule.advancedSettings[settings.inheritFrom].timeOptions || [];
+    } else {
+      sourceOptions = settings.timeOptions || [];
+    }
+    
+    // DEEP COPY with explicit color copying to prevent ANY reference sharing
+    return sourceOptions.map(opt => ({
+      id: opt.id,
+      label: opt.label,
+      includeInCycle: opt.includeInCycle,
+      order: opt.order,
+      isFixed: opt.isFixed,
+      color: String(opt.color) // Force string copy of color
+    }));
   }
 
   // Get the cycl able time options (those with includeInCycle = true)
@@ -155,33 +185,109 @@
   }
 
   // Get current time option object (with color) for a staff member on a specific day
+  // Returns fresh object EVERY time with explicit color string
   function getCurrentTimeOption(positionId: number, staffId: number, dayIndex: number, working: boolean) {
     const label = getCurrentTimeLabel(positionId, staffId, dayIndex, working);
     const timeOptions = getEffectiveTimeOptions(positionId);
     const option = timeOptions.find(opt => opt.label === label);
-    return option || { label, color: working ? '#10b981' : '#ef4444' }; // Default to green if working, red if not
+    
+    if (option) {
+      // Return completely fresh object with forced color string
+      return {
+        id: option.id,
+        label: option.label,
+        includeInCycle: option.includeInCycle,
+        order: option.order,
+        isFixed: option.isFixed,
+        color: String(option.color) // Force new string
+      };
+    }
+    
+    // Fallback
+    const fallbackColor = label === 'OFF' ? '#dc2626' : (label === 'PTO' ? '#f59e0b' : '#16a34a');
+    return {
+      id: 'fallback',
+      label,
+      color: fallbackColor,
+      includeInCycle: true,
+      order: 999,
+      isFixed: false
+    };
   }
 
-  // Cycle to next time option
+  // Cycle to next time option - AGGRESSIVE REACTIVITY VERSION
   function cycleTimeOption(positionId: number, staffId: number, dayIndex: number) {
     const cyclableOptions = getCyclableOptions(positionId);
-    if (cyclableOptions.length === 0) return;
     
-    const currentLabel = getCurrentTimeLabel(positionId, staffId, dayIndex, true);
-    const currentIndex = cyclableOptions.findIndex(opt => opt.label === currentLabel);
-    const nextIndex = (currentIndex + 1) % cyclableOptions.length;
-    const nextOption = cyclableOptions[nextIndex];
+    console.log('=== CYCLE START ===', { positionId, staffId, dayIndex, cyclableCount: cyclableOptions.length });
     
-    // Initialize structure if needed
-    if (!schedule.staffScheduleOverrides) schedule.staffScheduleOverrides = {};
-    if (!schedule.staffScheduleOverrides[positionId]) schedule.staffScheduleOverrides[positionId] = {};
-    if (!schedule.staffScheduleOverrides[positionId][staffId]) schedule.staffScheduleOverrides[positionId][staffId] = {};
+    if (cyclableOptions.length === 0) {
+      console.warn('No cyclable options available');
+      return;
+    }
+    
+    // Get staff's current schedule
+    const assignment = schedule.positionAssignments?.[positionId]?.[staffId];
+    if (!assignment) {
+      console.warn('No assignment found');
+      return;
+    }
+    
+    const staffSchedule = assignment.manualSchedule || [];
+    const isWorking = staffSchedule[dayIndex];
+    
+    // Get current label
+    const currentLabel = getCurrentTimeLabel(positionId, staffId, dayIndex, isWorking);
+    
+    // Find in cyclable options
+    let currentIndexInCycle = cyclableOptions.findIndex(opt => opt.label === currentLabel);
+    
+    // Calculate next
+    let nextIndexInCycle = currentIndexInCycle === -1 ? 0 : (currentIndexInCycle + 1) % cyclableOptions.length;
+    const nextOption = cyclableOptions[nextIndexInCycle];
+    
+    console.log('Cycling:', {
+      currentLabel,
+      currentIndexInCycle,
+      nextIndexInCycle,
+      nextLabel: nextOption.label,
+      cyclableLabels: cyclableOptions.map(o => o.label)
+    });
+    
+    // Initialize deeply if needed
+    if (!schedule.staffScheduleOverrides) {
+      schedule.staffScheduleOverrides = {};
+    }
+    if (!schedule.staffScheduleOverrides[positionId]) {
+      schedule.staffScheduleOverrides[positionId] = {};
+    }
+    if (!schedule.staffScheduleOverrides[positionId][staffId]) {
+      schedule.staffScheduleOverrides[positionId][staffId] = {};
+    }
     
     // Set the override
     schedule.staffScheduleOverrides[positionId][staffId][dayIndex] = nextOption.label;
     
-    // Trigger reactivity
-    schedule = schedule;
+    console.log('Set override:', nextOption.label, 'at position', positionId, 'staff', staffId, 'day', dayIndex);
+    
+    // SUPER AGGRESSIVE REACTIVITY - Create entirely new object
+    schedule = {
+      ...schedule,
+      staffScheduleOverrides: {
+        ...schedule.staffScheduleOverrides,
+        [positionId]: {
+          ...schedule.staffScheduleOverrides[positionId],
+          [staffId]: {
+            ...schedule.staffScheduleOverrides[positionId][staffId]
+          }
+        }
+      }
+    };
+    
+    console.log('=== CYCLE END ===', 'New schedule created');
+    
+    // Dispatch with the schedule
+    dispatch('scheduleUpdated', schedule);
   }
 </script>
 
@@ -594,7 +700,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each activeDetails as detail, idx (detail.id)}
+          {#each activeDetails as detail, idx (renderKey + "-" + detail.id)}
             {@const shiftLabel = schedule.type === '12-hour'
               ? '8:30a-8:30p'
               : (detail.shift === 'AM' ? '7a-5p' : '1p-11p')}
@@ -734,13 +840,13 @@
                 {/if}
               </td>
 
-              {#each detail.schedule as working, dIdx}
+              {#each detail.schedule as working, dIdx (activePositionId + '-' + detail.id + '-' + dIdx)}
                 {@const timeOption = getCurrentTimeOption(activePositionId, detail.id, dIdx, working)}
-                {@const currentLabel = timeOption.label}
-                {@const cellColor = timeOption.color}
+                {@const currentLabel = timeOption?.label || 'OFF'}
+                {@const cellColor = timeOption?.color || '#dc2626'}
                 <td
                   class={`schedule-cell border border-slate-300 px-1 py-2 text-center cursor-pointer transition-colors`}
-                  style="background-color: {cellColor}33; border-color: {cellColor};"
+                  style="background-color: {cellColor}20; border-color: {cellColor}80;"
                   title={`Click to cycle ${dates[dIdx].dayName} (${currentLabel})`}
                   on:click={() => {
                     if (String(detail.id).startsWith('sim-')) {
@@ -751,7 +857,7 @@
                     }
                   }}
                 >
-                  <div class="text-xs font-semibold" style="color: {cellColor};">{currentLabel}</div>
+                  <div class="text-xs font-semibold text-slate-800">{currentLabel}</div>
                 </td>
               {/each}
 

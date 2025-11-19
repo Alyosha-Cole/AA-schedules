@@ -829,8 +829,21 @@ function getInversePattern(pattern: number[]): number[] {
       const newAssignment = { ...prev, [field]: value };
       
       // If changing team or shift, clear any manual schedule so they follow the new pattern
+      // Also clear individual staff overrides to use the new team/shift defaults
       if (field === 'team' || field === 'shift') {
         delete newAssignment.manualSchedule;
+        
+        // Clear staff schedule overrides for this staff member
+        if (sch.staffScheduleOverrides?.[positionId]?.[staffId]) {
+          delete sch.staffScheduleOverrides[positionId][staffId];
+          // Clean up empty objects
+          if (Object.keys(sch.staffScheduleOverrides[positionId]).length === 0) {
+            delete sch.staffScheduleOverrides[positionId];
+          }
+          if (sch.staffScheduleOverrides && Object.keys(sch.staffScheduleOverrides).length === 0) {
+            delete sch.staffScheduleOverrides;
+          }
+        }
       }
       
       assignments[staffId] = newAssignment;
@@ -905,6 +918,31 @@ function getInversePattern(pattern: number[]): number[] {
   function updateSimStaff(scheduleId: number, positionId: number, simId: string, field: string, value: any) {
     schedules = schedules.map(s => {
       if (s.id !== scheduleId) return s;
+      
+      // If changing team or shift, clear staff schedule overrides for this simulated staff
+      if (field === 'team' || field === 'shift') {
+        if (s.staffScheduleOverrides?.[positionId]?.[simId]) {
+          const updatedOverrides = { ...s.staffScheduleOverrides };
+          if (updatedOverrides[positionId]) {
+            const posOverrides = { ...updatedOverrides[positionId] };
+            delete posOverrides[simId];
+            
+            if (Object.keys(posOverrides).length === 0) {
+              delete updatedOverrides[positionId];
+            } else {
+              updatedOverrides[positionId] = posOverrides;
+            }
+            
+            if (Object.keys(updatedOverrides).length === 0) {
+              s = { ...s };
+              delete s.staffScheduleOverrides;
+            } else {
+              s = { ...s, staffScheduleOverrides: updatedOverrides };
+            }
+          }
+        }
+      }
+      
       const simStaff = (s.positionSimStaff[positionId] || []).map(sim => {
         if (sim.id !== simId) return sim;
         
