@@ -95,6 +95,7 @@
   let saveStatus = '';
   let fileInput: HTMLInputElement;
   let isInitialLoad = true; // Prevent auto-save during initial component load
+  let scheduleUpdateCounter = 0; // Track mutations to trigger auto-save
 
   function saveToLocalStorage() {
     try {
@@ -115,6 +116,25 @@
     } catch (e) {
       console.error('✗ Failed to save to localStorage:', e);
       saveStatus = 'Save failed';
+    }
+  }
+
+  function handleScheduleMutation(event: CustomEvent) {
+    if (!isInitialLoad) {
+      const updatedSchedule = event.detail;
+      
+      if (updatedSchedule) {
+        // Find and replace the updated schedule in the array
+        schedules = schedules.map(s => 
+          s.id === updatedSchedule.id ? updatedSchedule : s
+        );
+      } else {
+        // If no schedule passed, just trigger reactivity
+        schedules = schedules;
+      }
+      
+      // Increment counter to trigger auto-save
+      scheduleUpdateCounter++;
     }
   }
 
@@ -612,8 +632,15 @@ function createDefaultSchedules() {
   // This reactive statement watches ALL the variables we want to auto-save
   // It will trigger whenever any of these variables change
   // BUT it won't trigger during initial component load (to prevent overwriting imports)
-  $: if (typeof window !== 'undefined' && isAuthenticated && !isInitialLoad &&
-         (schedules || staffPositions || startDate || editingOpen || collapsedSchedules)) {
+  $: if (typeof window !== 'undefined' && isAuthenticated && !isInitialLoad) {
+    // Access the variables to create dependencies
+    schedules;
+    staffPositions;
+    startDate;
+    editingOpen;
+    collapsedSchedules;
+    scheduleUpdateCounter; // This will trigger on manual mutations
+    
     saveToLocalStorage();
   }
 
@@ -1342,6 +1369,7 @@ function getInversePattern(pattern: number[]): number[] {
     on:import={triggerImport}
     on:importFile={importFromJSON}
     on:clearAll={clearAllData}
+    on:scheduleUpdated={handleScheduleMutation}
     on:shiftPeriod={(e) => shiftPeriod(e.detail)}
     on:setStartDate={setStartFromInput}
     on:addPosition={addPosition}

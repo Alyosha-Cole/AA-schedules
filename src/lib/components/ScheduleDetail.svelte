@@ -840,7 +840,10 @@
                   <div class="flex items-center justify-between gap-2 mb-1">
                     <div class="flex items-center gap-2 flex-1 min-w-0">
                       <button
-                        on:click={() => openIndividualStaffSchedule(activePositionId, detail.id, detail.name, activePosition?.name || '')}
+                        on:click={(e) => {
+                          e.stopPropagation();
+                          openIndividualStaffSchedule(activePositionId, detail.id, detail.name, activePosition?.name || '');
+                        }}
                         class="font-medium truncate hover:text-blue-600 hover:underline cursor-pointer text-left"
                       >
                         {detail.name}

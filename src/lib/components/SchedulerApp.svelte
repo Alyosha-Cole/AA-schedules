@@ -104,7 +104,6 @@
 
     <!-- Active Schedule Detail -->
     {#if activeSchedule}
-      {#key activeSchedule.id + '-' + (activeSchedule.lastEdited || 0) + '-' + startDate.getTime()}
         <ScheduleDetail
           schedule={activeSchedule}
           {schedules}
@@ -132,9 +131,9 @@
           on:updateSimDaysOffPattern
           on:updateRequiredCount
           on:updateSchedule
+          on:scheduleUpdated
           on:setActiveSchedule={handleSetActiveSchedule}
         />
-      {/key}
     {/if}
 
     <input
