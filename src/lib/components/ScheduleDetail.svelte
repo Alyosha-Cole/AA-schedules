@@ -1123,6 +1123,7 @@
       {schedule}
       {days}
       {dates}
+      {generateSchedule}
       positionId={selectedStaff.positionId}
       staffId={selectedStaff.staffId}
       staffName={selectedStaff.name}
