@@ -1146,8 +1146,49 @@ function getInversePattern(pattern: number[]): number[] {
   function generateSchedule(schedule, positionId: number, staffId: number) {
     const assignment = schedule.positionAssignments[positionId]?.[staffId];
     if (!assignment) return Array(14).fill(0);
-    if (assignment.manualSchedule) return assignment.manualSchedule;
-    return generateScheduleForAssignment(schedule, assignment);
+    
+    // Get base schedule (either manual or generated)
+    let baseSchedule: number[];
+    if (assignment.manualSchedule) {
+      baseSchedule = assignment.manualSchedule;
+    } else {
+      baseSchedule = generateScheduleForAssignment(schedule, assignment);
+    }
+    
+    // Apply staffScheduleOverrides if they exist
+    const overrides = schedule.staffScheduleOverrides?.[positionId]?.[staffId];
+    if (overrides) {
+      // Create a copy and apply overrides
+      baseSchedule = [...baseSchedule];
+      for (let dayIndex = 0; dayIndex < 14; dayIndex++) {
+        if (overrides[dayIndex] !== undefined) {
+          const override = overrides[dayIndex];
+          // If override is OFF or PTO, set to 0 (not working)
+          // Otherwise, set to 1 (working)
+          if (override === 'OFF' || override === 'PTO') {
+            baseSchedule[dayIndex] = 0;
+          } else {
+            baseSchedule[dayIndex] = 1;
+          }
+        }
+      }
+    }
+    
+    return baseSchedule;
+  }
+
+  // Helper function to determine which shift a time label represents
+  function getShiftFromTimeLabel(label: string): 'AM' | 'PM' | 'OFF' | null {
+    if (!label || label === 'OFF' || label === 'PTO') return 'OFF';
+    
+    // AM shifts typically start in the morning (7a, 8a, etc.)
+    if (label.includes('7a') || label.includes('8a') || label.includes('8:30a')) return 'AM';
+    
+    // PM shifts typically start in the afternoon (1p, 2p, etc.)
+    if (label.includes('1p') || label.includes('2p')) return 'PM';
+    
+    // Default to null if we can't determine
+    return null;
   }
 
   function calculateScheduleCosts(schedule) {
@@ -1204,18 +1245,54 @@ function getInversePattern(pattern: number[]): number[] {
         });
 
         scheduleData.forEach((on, idx) => {
-          if (schedule.type === '12-hour') {
-            dailyCoverage[idx] += on;
-          } else {
-            if (a.shift === 'AM') amCoverage[idx] += on;
-            if (a.shift === 'PM') pmCoverage[idx] += on;
+          if (on === 1) { // Only count if they're working this day
+            if (schedule.type === '12-hour') {
+              dailyCoverage[idx] += 1;
+            } else {
+              // Check if there's an override for this specific day
+              const override = schedule.staffScheduleOverrides?.[posId]?.[person.id]?.[idx];
+              
+              if (override) {
+                // Use the override to determine which shift
+                const shiftFromOverride = getShiftFromTimeLabel(override);
+                if (shiftFromOverride === 'AM') {
+                  amCoverage[idx] += 1;
+                } else if (shiftFromOverride === 'PM') {
+                  pmCoverage[idx] += 1;
+                }
+                // If 'OFF' or null, don't count in coverage
+              } else {
+                // No override, use assigned shift
+                if (a.shift === 'AM') amCoverage[idx] += 1;
+                if (a.shift === 'PM') pmCoverage[idx] += 1;
+              }
+            }
           }
         });
       }
 
       // Process simulated staff in this position
       for (const sim of (schedule.positionSimStaff[posId] || [])) {
-        const sched = sim.manualSchedule ? sim.manualSchedule : generateScheduleForAssignment(schedule, sim);
+        let sched = sim.manualSchedule ? sim.manualSchedule : generateScheduleForAssignment(schedule, sim);
+        
+        // Apply staffScheduleOverrides if they exist for this simulated staff
+        const overrides = schedule.staffScheduleOverrides?.[posId]?.[sim.id];
+        if (overrides) {
+          sched = [...sched];
+          for (let dayIndex = 0; dayIndex < 14; dayIndex++) {
+            if (overrides[dayIndex] !== undefined) {
+              const override = overrides[dayIndex];
+              // If override is OFF or PTO, set to 0 (not working)
+              // Otherwise, set to 1 (working)
+              if (override === 'OFF' || override === 'PTO') {
+                sched[dayIndex] = 0;
+              } else {
+                sched[dayIndex] = 1;
+              }
+            }
+          }
+        }
+        
         const simHours = sched.reduce((sum, d) => sum + d * hoursPerShift, 0);
 
         let regularHours, overtimeHours, simCost;
@@ -1247,11 +1324,28 @@ function getInversePattern(pattern: number[]): number[] {
         });
 
         sched.forEach((on, idx) => {
-          if (schedule.type === '12-hour') {
-            dailyCoverage[idx] += on;
-          } else {
-            if (sim.shift === 'AM') amCoverage[idx] += on;
-            if (sim.shift === 'PM') pmCoverage[idx] += on;
+          if (on === 1) { // Only count if they're working this day
+            if (schedule.type === '12-hour') {
+              dailyCoverage[idx] += 1;
+            } else {
+              // Check if there's an override for this specific day
+              const override = schedule.staffScheduleOverrides?.[posId]?.[sim.id]?.[idx];
+              
+              if (override) {
+                // Use the override to determine which shift
+                const shiftFromOverride = getShiftFromTimeLabel(override);
+                if (shiftFromOverride === 'AM') {
+                  amCoverage[idx] += 1;
+                } else if (shiftFromOverride === 'PM') {
+                  pmCoverage[idx] += 1;
+                }
+                // If 'OFF' or null, don't count in coverage
+              } else {
+                // No override, use assigned shift
+                if (sim.shift === 'AM') amCoverage[idx] += 1;
+                if (sim.shift === 'PM') pmCoverage[idx] += 1;
+              }
+            }
           }
         });
       }
