@@ -104,13 +104,41 @@
   }
 
   function printSchedule() {
-    // Mark this schedule for printing
+    // STEP 1: Remove ANY landscape styles from facility schedule
+    const landscapeStyle = document.getElementById('master-schedule-landscape');
+    if (landscapeStyle) {
+      landscapeStyle.remove();
+    }
+
+    // STEP 2: Inject our portrait style with high specificity
+    const portraitStyle = document.createElement('style');
+    portraitStyle.id = 'staff-schedule-portrait';
+    portraitStyle.textContent = `
+      @media print {
+        @page {
+          size: portrait !important;
+          margin: 0.5in !important;
+        }
+      }
+    `;
+    document.head.appendChild(portraitStyle);
+
+    // STEP 3: Mark this schedule for printing
     const scheduleEl = document.querySelector(`[data-schedule-id="${schedule.id}"]`);
     if (scheduleEl) {
-      scheduleEl.classList.add('print-target');
-      window.print();
-      // Remove the class after printing
-      setTimeout(() => scheduleEl.classList.remove('print-target'), 100);
+      scheduleEl.classList.add('staff-print-target');
+      
+      // STEP 4: Trigger print
+      setTimeout(() => {
+        window.print();
+        
+        // STEP 5: Cleanup after print dialog closes
+        setTimeout(() => {
+          scheduleEl.classList.remove('staff-print-target');
+          const styleEl = document.getElementById('staff-schedule-portrait');
+          if (styleEl) styleEl.remove();
+        }, 500);
+      }, 100);
     }
   }
 
@@ -376,9 +404,14 @@
       display: none !important;
     }
     
-    /* Show ONLY the schedule being printed */
-    :global([data-schedule-id].print-target) {
+    /* Show ONLY the staff schedule being printed */
+    :global([data-schedule-id].staff-print-target) {
       display: block !important;
+    }
+
+    /* Hide ALL master schedules during staff schedule print */
+    :global(.master-schedule-container) {
+      display: none !important;
     }
 
     /* Hide interactive elements and executive info */
@@ -397,12 +430,6 @@
 
     .hidden.print\\:block {
       display: block !important;
-    }
-
-    /* Portrait orientation for Week 1/Week 2 layout */
-    @page {
-      margin: 0.5in;
-      size: portrait;
     }
 
     :global(body) {
@@ -501,6 +528,14 @@
 
     .bg-slate-200 {
       background-color: #e2e8f0 !important;
+    }
+
+    .bg-green-200 {
+      background-color: #bbf7d0 !important;
+    }
+
+    .bg-red-200 {
+      background-color: #fecaca !important;
     }
   }
 </style>
@@ -1035,13 +1070,53 @@
                 </td>
                 
                 <!-- Week 1 days (0-6) -->
-                {#each sched.slice(0, 7) as working}
+                {#each sched.slice(0, 7) as working, dIdx}
+                  {@const timeOption = getCurrentTimeOption(position.id, detail.id, dIdx, working)}
+                  {@const cellLabel = timeOption?.label || (working ? shiftTime : 'OFF')}
                   <td class="border border-slate-900 px-1 py-1 text-center text-[6pt] {working ? 'bg-green-100' : ''}">
-                    {working ? shiftTime : 'OFF'}
+                    {cellLabel}
                   </td>
                 {/each}
               </tr>
             {/each}
+            
+            <!-- Coverage row for this position -->
+            {@const positionCoverage = costs.positionCoverage[position.id] || { dailyCoverage: [], amCoverage: [], pmCoverage: [] }}
+            {@const positionRequired = schedule.requiredCounts[position.id] || { day12: 0, am: 0, pm: 0 }}
+            
+            {#if schedule.type === '12-hour'}
+              <tr class="font-bold" style="background-color: {position.color}20">
+                <td class="border border-slate-900 px-2 py-1 text-left text-xs">
+                  Coverage
+                </td>
+                {#each positionCoverage.dailyCoverage.slice(0, 7) as c}
+                  <td class="border border-slate-900 px-1 py-1 text-center text-[7pt] {c >= positionRequired.day12 ? 'bg-green-200' : 'bg-red-200'}">
+                    {c}/{positionRequired.day12}
+                  </td>
+                {/each}
+              </tr>
+            {:else}
+              <tr class="font-bold" style="background-color: {position.color}20">
+                <td class="border border-slate-900 px-2 py-1 text-left text-xs">
+                  AM Coverage
+                </td>
+                {#each positionCoverage.amCoverage.slice(0, 7) as c}
+                  <td class="border border-slate-900 px-1 py-1 text-center text-[7pt] {c >= positionRequired.am ? 'bg-green-200' : 'bg-red-200'}">
+                    {c}/{positionRequired.am}
+                  </td>
+                {/each}
+              </tr>
+              <tr class="font-bold" style="background-color: {position.color}20">
+                <td class="border border-slate-900 px-2 py-1 text-left text-xs">
+                  PM Coverage
+                </td>
+                {#each positionCoverage.pmCoverage.slice(0, 7) as c}
+                  <td class="border border-slate-900 px-1 py-1 text-center text-[7pt] {c >= positionRequired.pm ? 'bg-green-200' : 'bg-red-200'}">
+                    {c}/{positionRequired.pm}
+                  </td>
+                {/each}
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>
@@ -1094,13 +1169,53 @@
                 </td>
                 
                 <!-- Week 2 days (7-13) -->
-                {#each sched.slice(7, 14) as working}
+                {#each sched.slice(7, 14) as working, dIdx}
+                  {@const timeOption = getCurrentTimeOption(position.id, detail.id, dIdx + 7, working)}
+                  {@const cellLabel = timeOption?.label || (working ? shiftTime : 'OFF')}
                   <td class="border border-slate-900 px-1 py-1 text-center text-[6pt] {working ? 'bg-green-100' : ''}">
-                    {working ? shiftTime : 'OFF'}
+                    {cellLabel}
                   </td>
                 {/each}
               </tr>
             {/each}
+            
+            <!-- Coverage row for this position -->
+            {@const positionCoverage = costs.positionCoverage[position.id] || { dailyCoverage: [], amCoverage: [], pmCoverage: [] }}
+            {@const positionRequired = schedule.requiredCounts[position.id] || { day12: 0, am: 0, pm: 0 }}
+            
+            {#if schedule.type === '12-hour'}
+              <tr class="font-bold" style="background-color: {position.color}20">
+                <td class="border border-slate-900 px-2 py-1 text-left text-xs">
+                  Coverage
+                </td>
+                {#each positionCoverage.dailyCoverage.slice(7, 14) as c}
+                  <td class="border border-slate-900 px-1 py-1 text-center text-[7pt] {c >= positionRequired.day12 ? 'bg-green-200' : 'bg-red-200'}">
+                    {c}/{positionRequired.day12}
+                  </td>
+                {/each}
+              </tr>
+            {:else}
+              <tr class="font-bold" style="background-color: {position.color}20">
+                <td class="border border-slate-900 px-2 py-1 text-left text-xs">
+                  AM Coverage
+                </td>
+                {#each positionCoverage.amCoverage.slice(7, 14) as c}
+                  <td class="border border-slate-900 px-1 py-1 text-center text-[7pt] {c >= positionRequired.am ? 'bg-green-200' : 'bg-red-200'}">
+                    {c}/{positionRequired.am}
+                  </td>
+                {/each}
+              </tr>
+              <tr class="font-bold" style="background-color: {position.color}20">
+                <td class="border border-slate-900 px-2 py-1 text-left text-xs">
+                  PM Coverage
+                </td>
+                {#each positionCoverage.pmCoverage.slice(7, 14) as c}
+                  <td class="border border-slate-900 px-1 py-1 text-center text-[7pt] {c >= positionRequired.pm ? 'bg-green-200' : 'bg-red-200'}">
+                    {c}/{positionRequired.pm}
+                  </td>
+                {/each}
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>

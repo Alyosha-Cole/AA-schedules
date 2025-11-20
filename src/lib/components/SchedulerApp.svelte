@@ -6,6 +6,8 @@
   import PositionRoster from './PositionRoster.svelte';
   import ScheduleConfigs from './ScheduleConfigs.svelte';
   import ScheduleDetail from './ScheduleDetail.svelte';
+  import MasterSchedule from './MasterSchedule.svelte';
+  import { Calendar, Users } from 'lucide-svelte';
 
   export let startDate: Date;
   export let saveStatus: string;
@@ -31,6 +33,9 @@
   // Track the active schedule tab
   let activeScheduleId: number | null = null;
 
+  // Track the active main tab (schedules or master-schedule)
+  let activeTab: 'schedules' | 'master-schedule' = 'schedules';
+
   // Set the first schedule as active when schedules change
   $: if (schedules.length > 0 && (activeScheduleId === null || !schedules.find(s => s.id === activeScheduleId))) {
     activeScheduleId = schedules[0].id;
@@ -54,86 +59,117 @@
 <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 print:p-0 print:bg-white">
   <div class="max-w-7xl mx-auto">
     <div class="print:hidden">
-    <SchedulerHeader
-      {staffPositions}
-      {startDate}
-      {saveStatus}
-      {lastSaved}
-      on:logout
-      on:export
-      on:import
-      on:clearAll
-      on:shiftPeriod
-      on:setStartDate
-      {toInputValue}
-    />
+      <SchedulerHeader
+        {staffPositions}
+        {startDate}
+        {saveStatus}
+        {lastSaved}
+        on:logout
+        on:export
+        on:import
+        on:clearAll
+        on:shiftPeriod
+        on:setStartDate
+        {toInputValue}
+      />
 
-    <CostOverview
-      {schedules}
-      {costAnalysis}
-    />
+      <!-- Tab Navigation -->
+      <div class="bg-white rounded-lg shadow-lg mb-6">
+        <div class="flex border-b border-slate-200">
+          <button
+            on:click={() => activeTab = 'schedules'}
+            class="flex items-center gap-2 px-6 py-4 font-medium transition-colors relative {activeTab === 'schedules' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}"
+          >
+            <Calendar class="w-5 h-5" />
+            Staff Schedules
+          </button>
+          <button
+            on:click={() => activeTab = 'master-schedule'}
+            class="flex items-center gap-2 px-6 py-4 font-medium transition-colors relative {activeTab === 'master-schedule' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}"
+          >
+            <Users class="w-5 h-5" />
+            Master Schedule
+          </button>
+        </div>
+      </div>
 
-    <StaffConfigs
-      {staffPositions}
-      bind:newPositionName
-      on:addPosition
-      on:deletePosition
-      on:updatePosition
-    />
+      {#if activeTab === 'schedules'}
+        <CostOverview
+          {schedules}
+          {costAnalysis}
+        />
 
-{#each staffPositions as position (position.id)}
-  <PositionRoster
-    {position}
-    bind:newStaffName={newStaffNames[position.id]}
-    on:addStaff={() => dispatch('addStaffToPosition', position.id)}
-    on:deleteStaff={(e) => dispatch('deleteStaffFromPosition', e.detail)}
-    on:updateStaff={(e) => dispatch('updateStaffInPosition', e.detail)}
-  />
-{/each}
+        <StaffConfigs
+          {staffPositions}
+          bind:newPositionName
+          on:addPosition
+          on:deletePosition
+          on:updatePosition
+        />
 
-    <ScheduleConfigs
-      {schedules}
-      {editingOpen}
-      bind:newScheduleName
-      on:addSchedule
-      on:deleteSchedule
-      on:updateSchedule
-      on:toggleEditing
-    />
+        {#each staffPositions as position (position.id)}
+          <PositionRoster
+            {position}
+            bind:newStaffName={newStaffNames[position.id]}
+            on:addStaff={() => dispatch('addStaffToPosition', position.id)}
+            on:deleteStaff={(e) => dispatch('deleteStaffFromPosition', e.detail)}
+            on:updateStaff={(e) => dispatch('updateStaffInPosition', e.detail)}
+          />
+        {/each}
+
+        <ScheduleConfigs
+          {schedules}
+          {editingOpen}
+          bind:newScheduleName
+          on:addSchedule
+          on:deleteSchedule
+          on:updateSchedule
+          on:toggleEditing
+        />
+      {/if}
     </div>
 
-    <!-- Active Schedule Detail -->
-    {#if activeSchedule}
-        <ScheduleDetail
-          schedule={activeSchedule}
-          {schedules}
-          {activeScheduleId}
-          {staffPositions}
-          {dates}
-          {days}
-          isEditing={editingOpen[activeSchedule.id]}
-          isCollapsed={collapsedSchedules[activeSchedule.id]}
-          {generateSchedule}
-          {generateScheduleForAssignment}
-          {calculateScheduleCosts}
-          {getDaysOffPattern}
-          on:toggleCollapse
-          on:toggleEditing
-          on:addSimStaff
-          on:deleteSimStaff
-          on:updateSimStaff
-          on:updateAssignment
-          on:toggleScheduleDay
-          on:toggleScheduleDayForSim
-          on:resetManualEdits
-          on:reorderList
-          on:updateDaysOffPattern
-          on:updateSimDaysOffPattern
-          on:updateRequiredCount
-          on:updateSchedule
-          on:scheduleUpdated
-          on:setActiveSchedule={handleSetActiveSchedule}
-        />
+    <!-- Active Schedule Detail (for Staff Schedules tab) -->
+    {#if activeTab === 'schedules' && activeSchedule}
+      <ScheduleDetail
+        schedule={activeSchedule}
+        {schedules}
+        {activeScheduleId}
+        {staffPositions}
+        {dates}
+        {days}
+        isEditing={editingOpen[activeSchedule.id]}
+        isCollapsed={collapsedSchedules[activeSchedule.id]}
+        {generateSchedule}
+        {generateScheduleForAssignment}
+        {calculateScheduleCosts}
+        {getDaysOffPattern}
+        on:toggleCollapse
+        on:toggleEditing
+        on:addSimStaff
+        on:deleteSimStaff
+        on:updateSimStaff
+        on:updateAssignment
+        on:toggleScheduleDay
+        on:toggleScheduleDayForSim
+        on:resetManualEdits
+        on:reorderList
+        on:updateDaysOffPattern
+        on:updateSimDaysOffPattern
+        on:updateRequiredCount
+        on:updateSchedule
+        on:scheduleUpdated
+        on:setActiveSchedule={handleSetActiveSchedule}
+      />
+    {/if}
+
+    <!-- Master Schedule View -->
+    {#if activeTab === 'master-schedule'}
+      <MasterSchedule
+        {dates}
+        {days}
+        {startDate}
+      />
     {/if}
 
     <input

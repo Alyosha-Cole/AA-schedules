@@ -56,7 +56,7 @@
           title="Export schedule to JSON file"
         >
           <Download class="w-4 h-4" aria-hidden="true" />
-          Export JSON
+          Save/Share
         </button>
         
         <button
@@ -65,7 +65,7 @@
           title="Import schedule from JSON file"
         >
           <Upload class="w-4 h-4" aria-hidden="true" />
-          Import JSON
+          Import Save File
         </button>
         
         <button
