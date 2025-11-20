@@ -33,7 +33,7 @@
       @media print {
         @page {
           size: landscape !important;
-          margin: 0.3in !important;
+          margin: 0.4in 0.5in !important;
         }
       }
     `;
@@ -72,7 +72,7 @@
       @media print {
         @page {
           size: landscape !important;
-          margin: 0.3in !important;
+          margin: 0.4in 0.5in !important;
         }
       }
     `;
@@ -85,7 +85,7 @@
     }
     
     // Show instructions for saving as PDF
-    alert('In the print dialog:\n1. Select "Save as PDF" or "Microsoft Print to PDF" as the printer\n2. Verify landscape orientation is selected\n3. Click Save and name your file (e.g., "National3_Week_12-01.pdf")\n\nThis PDF can be taken to a print shop for large format printing.');
+    alert('In the print dialog:\n1. Select "Save as PDF" or "Microsoft Print to PDF" as the printer\n2. Verify landscape orientation is selected\n3. Click Save and name your file (e.g., "National3_Schedule.pdf")\n\nThis PDF can be taken to a print shop for large format printing.');
     
     setTimeout(() => {
       window.print();
@@ -101,13 +101,6 @@
     }, 100);
   }
 
-  function formatDateRange() {
-    if (dates.length < 7) return '';
-    const firstDate = dates[0].fullDate;
-    const lastDate = dates[6].fullDate;
-    return `${firstDate.toLocaleDateString()} - ${lastDate.toLocaleDateString()}`;
-  }
-
   $: activeUnitData = units.find(u => u.id === activeUnit);
 </script>
 
@@ -120,7 +113,10 @@
     
     /* Show ONLY the master schedule being printed */
     :global(.master-schedule-container.facility-print-target) {
-      display: block !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: center !important;
+      align-items: center !important;
     }
 
     /* Hide ALL staff schedules during facility schedule print */
@@ -132,41 +128,94 @@
       display: none !important;
     }
 
-    /* Center content vertically with equal margins */
+    /* Vertically center content with equal margins */
     .master-schedule-container {
       background: white !important;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      min-height: 100vh !important;
+      height: 100vh !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: center !important;
       padding: 0 !important;
       margin: 0 !important;
       box-shadow: none !important;
       border-radius: 0 !important;
     }
 
+    /* Table wrapper for centering */
+    .overflow-x-auto {
+      overflow: visible !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      display: flex !important;
+      justify-content: center !important;
+    }
+
+    /* Optimize table sizing */
     :global(.master-schedule-table) {
-      font-size: 6.5pt;
+      font-size: 6.5pt !important;
       background: white !important;
+      width: 98% !important;
+      max-width: 98% !important;
+      table-layout: fixed !important;
     }
 
     :global(.master-schedule-table th),
     :global(.master-schedule-table td) {
-      padding: 1px 2px;
+      padding: 2px 2px !important;
       background-clip: padding-box !important;
+      overflow: hidden !important;
+      word-wrap: break-word !important;
     }
 
-    :global(.master-schedule-table textarea) {
+    /* Time columns - fixed narrow width */
+    :global(.master-schedule-table th:nth-child(1)),
+    :global(.master-schedule-table td:nth-child(1)),
+    :global(.master-schedule-table th:nth-child(7)),
+    :global(.master-schedule-table td:nth-child(7)) {
+      width: 9% !important;
+      font-size: 5.5pt !important;
+    }
+
+    /* Day columns - equal width */
+    :global(.master-schedule-table th:nth-child(2)),
+    :global(.master-schedule-table td:nth-child(2)),
+    :global(.master-schedule-table th:nth-child(3)),
+    :global(.master-schedule-table td:nth-child(3)),
+    :global(.master-schedule-table th:nth-child(4)),
+    :global(.master-schedule-table td:nth-child(4)),
+    :global(.master-schedule-table th:nth-child(5)),
+    :global(.master-schedule-table td:nth-child(5)),
+    :global(.master-schedule-table th:nth-child(6)),
+    :global(.master-schedule-table td:nth-child(6)),
+    :global(.master-schedule-table th:nth-child(8)),
+    :global(.master-schedule-table td:nth-child(8)),
+    :global(.master-schedule-table th:nth-child(9)),
+    :global(.master-schedule-table td:nth-child(9)) {
+      width: 11.5% !important;
+    }
+
+    :global(.master-schedule-table textarea),
+    :global(.master-schedule-table input) {
       border: none !important;
       background: transparent !important;
       padding: 0 !important;
+      margin: 0 !important;
       min-height: auto !important;
       font-size: 6pt !important;
+      line-height: 1.1 !important;
     }
 
     .unit-header {
-      font-size: 10pt;
-      margin-bottom: 4px;
+      font-size: 11pt !important;
+      margin-bottom: 6px !important;
+      text-align: center !important;
+    }
+
+    .print-footer {
+      font-size: 7pt !important;
+      margin-top: 6px !important;
+      text-align: center !important;
     }
 
     /* Remove any gray backgrounds */
@@ -174,9 +223,13 @@
       background: white !important;
     }
 
-    /* Ensure overflow doesn't create extra space */
-    .overflow-x-auto {
-      overflow: visible !important;
+    /* Ensure table borders are visible */
+    :global(.master-schedule-table),
+    :global(.master-schedule-table th),
+    :global(.master-schedule-table td) {
+      border-color: #1e293b !important;
+      print-color-adjust: exact !important;
+      -webkit-print-color-adjust: exact !important;
     }
   }
 </style>
@@ -186,7 +239,7 @@
   <div class="flex items-center justify-between mb-6 print-hide">
     <div>
       <h2 class="text-2xl font-bold text-slate-800">Master Daily Schedule</h2>
-      <p class="text-slate-600 mt-1">Week of {formatDateRange()}</p>
+      <p class="text-slate-600 mt-1">Recurring Daily Schedule Template</p>
     </div>
     <div class="flex gap-2">
       <button
@@ -212,8 +265,7 @@
 
   <!-- Print-only header -->
   <div class="hidden print:block mb-2">
-    <h1 class="unit-header text-center font-bold text-slate-900">{activeUnitData?.label} - Master Daily Schedule</h1>
-    <p class="text-center text-[8pt] text-slate-600">Week of {formatDateRange()}</p>
+    <h1 class="unit-header font-bold text-slate-900">{activeUnitData?.label} - Master Daily Schedule</h1>
   </div>
 
   <!-- Unit Tabs -->
@@ -254,12 +306,12 @@
 
   <!-- Print Footer Info -->
   <div class="mt-6 text-sm text-slate-600 print-hide">
-    <p class="mb-2"><strong>🖨️ Printing:</strong> Click "Print" to print directly. The schedule automatically uses landscape orientation.</p>
+    <p class="mb-2"><strong>🖨️ Printing:</strong> Click "Print" to print directly. The schedule automatically uses landscape orientation and fills the page.</p>
     <p><strong>📄 For Print Shops:</strong> Click "Download PDF", then in the print dialog select "Save as PDF" as the destination. Give the PDF to your print shop to print at larger sizes (e.g., 11x17" or larger).</p>
   </div>
 
   <!-- Print-only footer -->
-  <div class="hidden print:block mt-2 text-[7pt] text-slate-600 text-center">
+  <div class="hidden print:block mt-2 text-slate-600 print-footer">
     <p>Printed on {new Date().toLocaleDateString()}</p>
   </div>
 </div>

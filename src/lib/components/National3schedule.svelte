@@ -36,6 +36,9 @@
   // File input for import
   let fileInput: HTMLInputElement;
 
+  // Day names for display (no dates)
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
   // Initialize with defaults
   function initializeSchedule() {
     timeSlots.forEach(slot => {
@@ -127,8 +130,8 @@
   // Export to CSV (Excel-compatible)
   function exportToExcel() {
     // Create CSV header
-    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    let csv = 'Weekday Time,' + dayNames.slice(0, 5).join(',') + ',Weekend Time,' + dayNames.slice(5, 7).join(',') + '\n';
+    const dayNamesHeader = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    let csv = 'Weekday Time,' + dayNamesHeader.slice(0, 5).join(',') + ',Weekend Time,' + dayNamesHeader.slice(5, 7).join(',') + '\n';
     
     // Add each row
     timeSlots.forEach(slot => {
@@ -297,19 +300,17 @@
         <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-left font-bold text-[9px] w-[85px]">
           Weekday Time
         </th>
-        {#each dates.slice(0, 5) as date}
+        {#each dayNames.slice(0, 5) as dayName}
           <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-center font-bold">
-            <div class="font-bold text-[9px]">{date.dayName}</div>
-            <div class="text-[7px] font-normal opacity-90">{date.date}</div>
+            <div class="font-bold text-[9px]">{dayName}</div>
           </th>
         {/each}
         <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-left font-bold text-[9px] w-[85px]">
           Weekend Time
         </th>
-        {#each dates.slice(5, 7) as date}
+        {#each dayNames.slice(5, 7) as dayName}
           <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-center font-bold">
-            <div class="font-bold text-[9px]">{date.dayName}</div>
-            <div class="text-[7px] font-normal opacity-90">{date.date}</div>
+            <div class="font-bold text-[9px]">{dayName}</div>
           </th>
         {/each}
         <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 w-[30px] print:hidden"></th>
@@ -396,5 +397,28 @@
       <Plus class="w-4 h-4" />
       Add Row
     </button>
+  </div>
+
+  <!-- Export/Import Buttons -->
+  <div class="mt-4 flex gap-2 print:hidden">
+    <button
+      on:click={exportToExcel}
+      class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 font-medium text-sm transition-colors"
+    >
+      <Download class="w-4 h-4" />
+      Export to Excel
+    </button>
+    
+    <label class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 font-medium text-sm transition-colors cursor-pointer">
+      <Upload class="w-4 h-4" />
+      Import from Excel
+      <input
+        type="file"
+        accept=".csv"
+        bind:this={fileInput}
+        on:change={importFromExcel}
+        class="hidden"
+      />
+    </label>
   </div>
 </div>
