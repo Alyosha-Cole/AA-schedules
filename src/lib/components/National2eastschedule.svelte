@@ -1,153 +1,227 @@
 <script lang="ts">
-  import { Printer } from 'lucide-svelte';
-  import National1Schedule from './National1Schedule.svelte';
-  import National2EastSchedule from './National2EastSchedule.svelte';
-  import National2WestSchedule from './National2WestSchedule.svelte';
-  import National3Schedule from './National3Schedule.svelte';
+  import { GripVertical, Plus, Trash2 } from 'lucide-svelte';
 
   export let dates: any[];
-  export let days: string[];
-  export let startDate: Date;
+  export let onPrint: () => void;
 
-  // Active unit selection
-  let activeUnit: 'national1' | 'national2east' | 'national2west' | 'national3' = 'national3';
-
-  const units = [
-    { id: 'national1', label: 'National 1', component: National1Schedule },
-    { id: 'national2east', label: 'National 2 East', component: National2EastSchedule },
-    { id: 'national2west', label: 'National 2 West', component: National2WestSchedule },
-    { id: 'national3', label: 'National 3', component: National3Schedule },
+  let timeSlots = [
+    { id: 1, weekdayTime: '7:00-7:15 AM', weekendTime: '8:00-8:25 AM', weekdays: 'Wake up-Hygiene', weekend: 'Wake up-Hygiene' },
+    { id: 2, weekdayTime: '7:15-7:30 AM', weekendTime: '8:30-9:00 AM', weekdays: 'Room Clean', weekend: 'Breakfast/Med pass' },
+    { id: 3, weekdayTime: '7:30-8:00 AM', weekendTime: '9:10-9:50 AM', weekdays: 'Morning Check-in', weekend: 'Staff led group' },
+    { id: 4, weekdayTime: '8:00-8:25 AM', weekendTime: '10:00-11:00 AM', weekdays: 'Med pass', weekend: 'Rec Time' },
+    { id: 5, weekdayTime: '8:30-8:50 AM', weekendTime: '11:30-11:50 AM', weekdays: 'Goal of the day', weekend: 'Lunch' },
+    { id: 6, weekdayTime: '9:00-12:00 PM', weekendTime: '12:00-12:50 PM', weekdays: 'School', weekend: 'Major Clean-up' },
+    { id: 7, weekdayTime: '11:00-1:00 PM', weekendTime: '1:00-1:50 PM', weekdays: 'Lunch Periods', weekend: 'Writing Skills' },
+    { id: 8, weekdayTime: '1:00-2:30 PM', weekendTime: '2:00-2:50 PM', weekdays: 'School', weekend: 'TV Program' },
+    { id: 9, weekdayTime: '2:30-3:20 PM', weekendTime: '3:00-4:00 PM', weekdays: 'Rec-Time', weekend: 'Rec-Time' },
+    { id: 10, weekdayTime: '3:20-3:50 PM', weekendTime: '4:10-4:30 PM', weekdays: 'Unstructured Time', weekend: 'Unstructured time' },
+    { id: 11, weekdayTime: '4:00-4:20 PM', weekendTime: '4:30-4:50 PM', weekdays: 'Dinner', weekend: 'Dinner' },
+    { id: 12, weekdayTime: '4:30-5:30 PM', weekendTime: '5:30-6:00 PM', weekdays: 'Group', weekend: 'Unstructured time' },
+    { id: 13, weekdayTime: '5:30-6:30 PM', weekendTime: '6:00-7:00 PM', weekdays: 'Showers', weekend: 'Showers' },
+    { id: 14, weekdayTime: '6:30-7:45 PM', weekendTime: '7:00-7:45 PM', weekdays: 'PM Check-in/Med pass', weekend: 'PM Check-in/Med pass' },
+    { id: 15, weekdayTime: '8:00 PM', weekendTime: '8:00 PM', weekdays: 'Bed Time', weekend: 'Bed Time' },
   ];
 
-  function printSchedule() {
-    window.print();
+  let scheduleData: Record<number, Record<number, string>> = {};
+  let dragItem: number | null = null;
+  let dragOverIndex: number | null = null;
+  let nextId = 16;
+
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  function initializeSchedule() {
+    timeSlots.forEach(slot => {
+      scheduleData[slot.id] = {};
+      for (let i = 0; i < 7; i++) {
+        scheduleData[slot.id][i] = i < 5 ? slot.weekdays : slot.weekend;
+      }
+    });
   }
 
-  function formatDateRange() {
-    if (dates.length < 7) return '';
-    const firstDate = dates[0].fullDate;
-    const lastDate = dates[6].fullDate;
-    return `${firstDate.toLocaleDateString()} - ${lastDate.toLocaleDateString()}`;
+  initializeSchedule();
+
+  function onDragStart(slotId: number, e: DragEvent) {
+    dragItem = slotId;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(slotId));
+    }
   }
 
-  $: activeUnitData = units.find(u => u.id === activeUnit);
+  function onDragOver(idx: number, e: DragEvent) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dragOverIndex = idx;
+  }
+
+  function onDragLeave() {
+    dragOverIndex = null;
+  }
+
+  function onDrop(targetSlotId: number, e: DragEvent) {
+    e.preventDefault();
+    dragOverIndex = null;
+    if (dragItem !== null && dragItem !== targetSlotId) {
+      const fromIndex = timeSlots.findIndex(s => s.id === dragItem);
+      const toIndex = timeSlots.findIndex(s => s.id === targetSlotId);
+      if (fromIndex !== -1 && toIndex !== -1) {
+        const newSlots = [...timeSlots];
+        const [movedSlot] = newSlots.splice(fromIndex, 1);
+        newSlots.splice(toIndex, 0, movedSlot);
+        timeSlots = newSlots;
+      }
+    }
+    dragItem = null;
+  }
+
+  function onDragEnd() {
+    dragOverIndex = null;
+    dragItem = null;
+  }
+
+  function addRow() {
+    const newSlot = { id: nextId++, weekdayTime: '', weekendTime: '', weekdays: '', weekend: '' };
+    timeSlots = [...timeSlots, newSlot];
+    scheduleData[newSlot.id] = {};
+    for (let i = 0; i < 7; i++) {
+      scheduleData[newSlot.id][i] = '';
+    }
+  }
+
+  function deleteRow(slotId: number) {
+    if (timeSlots.length <= 1) {
+      alert('Cannot delete the last row');
+      return;
+    }
+    timeSlots = timeSlots.filter(s => s.id !== slotId);
+    delete scheduleData[slotId];
+  }
 </script>
 
 <style>
+  .editable-cell {
+    transition: background-color 0.2s;
+  }
+  .editable-cell:hover {
+    background-color: rgba(59, 130, 246, 0.05);
+  }
+  .editable-cell textarea {
+    width: 100%;
+    min-height: 45px;
+    resize: vertical;
+  }
+  .drag-row {
+    transition: all 0.2s;
+  }
+  .drag-row.dragging {
+    opacity: 0.5;
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+  .drag-row.drag-over {
+    border-top: 3px solid #3b82f6;
+  }
+  .drag-row {
+    cursor: move;
+  }
   @media print {
-    /* Landscape orientation for master schedule */
-    @page {
-      size: landscape;
-      margin: 0.3in;
-    }
-    
-    .print-hide {
-      display: none !important;
-    }
-
-    :global(.master-schedule-table) {
-      font-size: 6.5pt;
-    }
-
-    :global(.master-schedule-table th),
-    :global(.master-schedule-table td) {
-      padding: 1px 2px;
-    }
-
-    :global(.master-schedule-table textarea) {
-      border: none !important;
-      background: transparent !important;
-      padding: 0 !important;
-      min-height: auto !important;
-      font-size: 6pt !important;
-    }
-
-    .unit-header {
-      font-size: 10pt;
-      margin-bottom: 4px;
+    .drag-row {
+      cursor: default;
     }
   }
 </style>
 
-<div class="master-schedule-container bg-white rounded-lg shadow-lg p-6 mb-6">
-  <!-- Header with Print Button -->
-  <div class="flex items-center justify-between mb-6 print-hide">
-    <div>
-      <h2 class="text-2xl font-bold text-slate-800">Master Daily Schedule</h2>
-      <p class="text-slate-600 mt-1">Week of {formatDateRange()}</p>
-    </div>
-    <div class="flex gap-2">
-      <button
-        on:click={printSchedule}
-        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors"
-        title="Print master schedule"
-      >
-        <Printer class="w-4 h-4" />
-        Print
-      </button>
-      <button
-        on:click={printSchedule}
-        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 font-medium transition-colors"
-        title="Save as PDF for print shop"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        Download PDF
-      </button>
-    </div>
-  </div>
-
-  <!-- Print-only header -->
-  <div class="hidden print:block mb-2">
-    <h1 class="unit-header text-center font-bold text-slate-900">{activeUnitData?.label} - Master Daily Schedule</h1>
-    <p class="text-center text-[8pt] text-slate-600">Week of {formatDateRange()}</p>
-  </div>
-
-  <!-- Unit Tabs -->
-  <div class="mb-6 print-hide">
-    <div class="border-b border-slate-200">
-      <div class="flex gap-1">
-        {#each units as unit}
-          <button
-            on:click={() => activeUnit = unit.id}
-            class="px-4 py-2 font-medium transition-colors {activeUnit === unit.id 
-              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' 
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}"
-          >
-            {unit.label}
-          </button>
+<div class="overflow-x-auto">
+  <table class="master-schedule-table w-full border-collapse text-[10px]">
+    <thead>
+      <tr>
+        <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 w-[30px] print:hidden"></th>
+        <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-left font-bold text-[9px] w-[85px]">
+          Weekday Time
+        </th>
+        {#each dayNames.slice(0, 5) as dayName}
+          <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-center font-bold">
+            <div class="font-bold text-[9px]">{dayName}</div>
+          </th>
         {/each}
-      </div>
-    </div>
-  </div>
-
-  <!-- Instructions -->
-  <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg print-hide">
-    <p class="text-sm text-blue-800">
-      <strong>📝 {activeUnitData?.label}:</strong> Weekday times are in the first column before Mon-Fri. Weekend times are next to Sat-Sun. Click any cell to edit activities.
-    </p>
-  </div>
-
-  <!-- Active Unit Schedule -->
-  {#if activeUnit === 'national1'}
-    <National1Schedule {dates} onPrint={printSchedule} />
-  {:else if activeUnit === 'national2east'}
-    <National2EastSchedule {dates} onPrint={printSchedule} />
-  {:else if activeUnit === 'national2west'}
-    <National2WestSchedule {dates} onPrint={printSchedule} />
-  {:else if activeUnit === 'national3'}
-    <National3Schedule {dates} onPrint={printSchedule} />
-  {/if}
-
-  <!-- Print Footer Info -->
-  <div class="mt-6 text-sm text-slate-600 print-hide">
-    <p class="mb-2"><strong>🖨️ Printing:</strong> Click "Print" to print directly. The schedule automatically uses landscape orientation.</p>
-    <p><strong>📄 For Print Shops:</strong> Click "Download PDF", then in the print dialog select "Save as PDF" as the destination. Give the PDF to your print shop to print at larger sizes (e.g., 11x17" or larger).</p>
-  </div>
-
-  <!-- Print-only footer -->
-  <div class="hidden print:block mt-2 text-[7pt] text-slate-600 text-center">
-    <p>Printed on {new Date().toLocaleDateString()}</p>
+        <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-left font-bold text-[9px] w-[85px]">
+          Weekend Time
+        </th>
+        {#each dayNames.slice(5, 7) as dayName}
+          <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-center font-bold">
+            <div class="font-bold text-[9px]">{dayName}</div>
+          </th>
+        {/each}
+        <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 w-[30px] print:hidden"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {#each timeSlots as slot, idx (slot.id)}
+        <tr
+          draggable="true"
+          on:dragstart={(e) => onDragStart(slot.id, e)}
+          on:dragover={(e) => onDragOver(idx, e)}
+          on:dragleave={onDragLeave}
+          on:drop={(e) => onDrop(slot.id, e)}
+          on:dragend={onDragEnd}
+          class="drag-row {dragOverIndex === idx ? 'drag-over' : ''} {dragItem === slot.id ? 'dragging' : ''}"
+        >
+          <td class="border-2 border-slate-900 bg-slate-50 px-1 py-1 text-center cursor-move print:hidden">
+            <GripVertical class="w-4 h-4 text-slate-400 inline-block" />
+          </td>
+          <td class="border-2 border-slate-900 bg-slate-100 px-1 py-1 align-top">
+            <input
+              type="text"
+              bind:value={slot.weekdayTime}
+              class="w-full px-1 py-1 text-[8px] font-semibold border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent print:border-0"
+              placeholder="Time..."
+            />
+          </td>
+          {#each Array(5) as _, dayIndex}
+            <td class="editable-cell border-2 border-slate-900 px-1 py-1 align-top">
+              <textarea
+                bind:value={scheduleData[slot.id][dayIndex]}
+                class="w-full min-h-[45px] px-1 py-1 text-[10px] border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent resize-y print:border-0 print:p-0 print:min-h-0"
+              />
+            </td>
+          {/each}
+          <td class="border-2 border-slate-900 bg-slate-100 px-1 py-1 align-top">
+            <input
+              type="text"
+              bind:value={slot.weekendTime}
+              class="w-full px-1 py-1 text-[8px] font-semibold border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent print:border-0"
+              placeholder="Time..."
+            />
+          </td>
+          {#each Array(2) as _, weekendIdx}
+            {@const dayIndex = weekendIdx + 5}
+            <td class="editable-cell border-2 border-slate-900 px-1 py-1 align-top">
+              <textarea
+                bind:value={scheduleData[slot.id][dayIndex]}
+                class="w-full min-h-[45px] px-1 py-1 text-[10px] border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent resize-y print:border-0 print:p-0 print:min-h-0"
+              />
+            </td>
+          {/each}
+          <td class="border-2 border-slate-900 bg-slate-50 px-1 py-1 text-center print:hidden">
+            <button
+              on:click={() => deleteRow(slot.id)}
+              class="text-red-600 hover:text-red-800 hover:bg-red-50 p-1 rounded transition-colors"
+              title="Delete row"
+            >
+              <Trash2 class="w-4 h-4" />
+            </button>
+          </td>
+        </tr>
+      {/each}
+    </tbody>
+  </table>
+  
+  <div class="mt-4 print:hidden">
+    <button
+      on:click={addRow}
+      class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium text-sm transition-colors"
+    >
+      <Plus class="w-4 h-4" />
+      Add Row
+    </button>
   </div>
 </div>

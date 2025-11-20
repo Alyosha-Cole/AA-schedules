@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { Printer, GripVertical, Plus, Trash2 } from 'lucide-svelte';
+  import { GripVertical, Plus, Trash2 } from 'lucide-svelte';
 
   export let dates: any[];
   export let onPrint: () => void;
 
-  // National 2 West schedule time slots - now mutable
   let timeSlots = [
     { id: 1, weekdayTime: '7:00-7:15 AM', weekendTime: '8:00-8:25 AM', weekdays: 'Wake up-Hygiene', weekend: 'Wake up-Hygiene' },
     { id: 2, weekdayTime: '7:15-7:30 AM', weekendTime: '8:30-9:00 AM', weekdays: 'Room Clean', weekend: 'Breakfast/Med pass' },
@@ -27,6 +26,8 @@
   let dragItem: number | null = null;
   let dragOverIndex: number | null = null;
   let nextId = 16;
+
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   function initializeSchedule() {
     timeSlots.forEach(slot => {
@@ -60,11 +61,9 @@
   function onDrop(targetSlotId: number, e: DragEvent) {
     e.preventDefault();
     dragOverIndex = null;
-    
     if (dragItem !== null && dragItem !== targetSlotId) {
       const fromIndex = timeSlots.findIndex(s => s.id === dragItem);
       const toIndex = timeSlots.findIndex(s => s.id === targetSlotId);
-      
       if (fromIndex !== -1 && toIndex !== -1) {
         const newSlots = [...timeSlots];
         const [movedSlot] = newSlots.splice(fromIndex, 1);
@@ -84,7 +83,9 @@
     const newSlot = { id: nextId++, weekdayTime: '', weekendTime: '', weekdays: '', weekend: '' };
     timeSlots = [...timeSlots, newSlot];
     scheduleData[newSlot.id] = {};
-    for (let i = 0; i < 7; i++) scheduleData[newSlot.id][i] = '';
+    for (let i = 0; i < 7; i++) {
+      scheduleData[newSlot.id][i] = '';
+    }
   }
 
   function deleteRow(slotId: number) {
@@ -98,13 +99,35 @@
 </script>
 
 <style>
-  .editable-cell { transition: background-color 0.2s; }
-  .editable-cell:hover { background-color: rgba(59, 130, 246, 0.05); }
-  .editable-cell textarea { width: 100%; min-height: 45px; resize: vertical; }
-  .drag-row { transition: all 0.2s; cursor: move; }
-  .drag-row.dragging { opacity: 0.5; background-color: rgba(59, 130, 246, 0.1); }
-  .drag-row.drag-over { border-top: 3px solid #3b82f6; }
-  @media print { .drag-row { cursor: default; } }
+  .editable-cell {
+    transition: background-color 0.2s;
+  }
+  .editable-cell:hover {
+    background-color: rgba(59, 130, 246, 0.05);
+  }
+  .editable-cell textarea {
+    width: 100%;
+    min-height: 45px;
+    resize: vertical;
+  }
+  .drag-row {
+    transition: all 0.2s;
+  }
+  .drag-row.dragging {
+    opacity: 0.5;
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+  .drag-row.drag-over {
+    border-top: 3px solid #3b82f6;
+  }
+  .drag-row {
+    cursor: move;
+  }
+  @media print {
+    .drag-row {
+      cursor: default;
+    }
+  }
 </style>
 
 <div class="overflow-x-auto">
@@ -112,18 +135,20 @@
     <thead>
       <tr>
         <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 w-[30px] print:hidden"></th>
-        <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-left font-bold text-[9px] w-[85px]">Weekday Time</th>
-        {#each dates.slice(0, 5) as date}
+        <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-left font-bold text-[9px] w-[85px]">
+          Weekday Time
+        </th>
+        {#each dayNames.slice(0, 5) as dayName}
           <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-center font-bold">
-            <div class="font-bold text-[9px]">{date.dayName}</div>
-            <div class="text-[7px] font-normal opacity-90">{date.date}</div>
+            <div class="font-bold text-[9px]">{dayName}</div>
           </th>
         {/each}
-        <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-left font-bold text-[9px] w-[85px]">Weekend Time</th>
-        {#each dates.slice(5, 7) as date}
+        <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-left font-bold text-[9px] w-[85px]">
+          Weekend Time
+        </th>
+        {#each dayNames.slice(5, 7) as dayName}
           <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 text-center font-bold">
-            <div class="font-bold text-[9px]">{date.dayName}</div>
-            <div class="text-[7px] font-normal opacity-90">{date.date}</div>
+            <div class="font-bold text-[9px]">{dayName}</div>
           </th>
         {/each}
         <th class="border-2 border-slate-900 bg-slate-700 text-white px-1 py-1 w-[30px] print:hidden"></th>
@@ -131,29 +156,57 @@
     </thead>
     <tbody>
       {#each timeSlots as slot, idx (slot.id)}
-        <tr draggable="true" on:dragstart={(e) => onDragStart(slot.id, e)} on:dragover={(e) => onDragOver(idx, e)} on:dragleave={onDragLeave} on:drop={(e) => onDrop(slot.id, e)} on:dragend={onDragEnd} class="drag-row {dragOverIndex === idx ? 'drag-over' : ''} {dragItem === slot.id ? 'dragging' : ''}">
+        <tr
+          draggable="true"
+          on:dragstart={(e) => onDragStart(slot.id, e)}
+          on:dragover={(e) => onDragOver(idx, e)}
+          on:dragleave={onDragLeave}
+          on:drop={(e) => onDrop(slot.id, e)}
+          on:dragend={onDragEnd}
+          class="drag-row {dragOverIndex === idx ? 'drag-over' : ''} {dragItem === slot.id ? 'dragging' : ''}"
+        >
           <td class="border-2 border-slate-900 bg-slate-50 px-1 py-1 text-center cursor-move print:hidden">
             <GripVertical class="w-4 h-4 text-slate-400 inline-block" />
           </td>
           <td class="border-2 border-slate-900 bg-slate-100 px-1 py-1 align-top">
-            <input type="text" bind:value={slot.weekdayTime} class="w-full px-1 py-1 text-[8px] font-semibold border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent print:border-0" placeholder="Time..." />
+            <input
+              type="text"
+              bind:value={slot.weekdayTime}
+              class="w-full px-1 py-1 text-[8px] font-semibold border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent print:border-0"
+              placeholder="Time..."
+            />
           </td>
           {#each Array(5) as _, dayIndex}
             <td class="editable-cell border-2 border-slate-900 px-1 py-1 align-top">
-              <textarea bind:value={scheduleData[slot.id][dayIndex]} class="w-full min-h-[45px] px-1 py-1 text-[10px] border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent resize-y print:border-0 print:p-0 print:min-h-0"></textarea>
+              <textarea
+                bind:value={scheduleData[slot.id][dayIndex]}
+                class="w-full min-h-[45px] px-1 py-1 text-[10px] border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent resize-y print:border-0 print:p-0 print:min-h-0"
+              />
             </td>
           {/each}
           <td class="border-2 border-slate-900 bg-slate-100 px-1 py-1 align-top">
-            <input type="text" bind:value={slot.weekendTime} class="w-full px-1 py-1 text-[8px] font-semibold border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent print:border-0" placeholder="Time..." />
+            <input
+              type="text"
+              bind:value={slot.weekendTime}
+              class="w-full px-1 py-1 text-[8px] font-semibold border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent print:border-0"
+              placeholder="Time..."
+            />
           </td>
           {#each Array(2) as _, weekendIdx}
             {@const dayIndex = weekendIdx + 5}
             <td class="editable-cell border-2 border-slate-900 px-1 py-1 align-top">
-              <textarea bind:value={scheduleData[slot.id][dayIndex]} class="w-full min-h-[45px] px-1 py-1 text-[10px] border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent resize-y print:border-0 print:p-0 print:min-h-0"></textarea>
+              <textarea
+                bind:value={scheduleData[slot.id][dayIndex]}
+                class="w-full min-h-[45px] px-1 py-1 text-[10px] border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent resize-y print:border-0 print:p-0 print:min-h-0"
+              />
             </td>
           {/each}
           <td class="border-2 border-slate-900 bg-slate-50 px-1 py-1 text-center print:hidden">
-            <button on:click={() => deleteRow(slot.id)} class="text-red-600 hover:text-red-800 hover:bg-red-50 p-1 rounded transition-colors" title="Delete row">
+            <button
+              on:click={() => deleteRow(slot.id)}
+              class="text-red-600 hover:text-red-800 hover:bg-red-50 p-1 rounded transition-colors"
+              title="Delete row"
+            >
               <Trash2 class="w-4 h-4" />
             </button>
           </td>
@@ -163,7 +216,10 @@
   </table>
   
   <div class="mt-4 print:hidden">
-    <button on:click={addRow} class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium text-sm transition-colors">
+    <button
+      on:click={addRow}
+      class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium text-sm transition-colors"
+    >
       <Plus class="w-4 h-4" />
       Add Row
     </button>
