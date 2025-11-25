@@ -1244,31 +1244,36 @@ function getInversePattern(pattern: number[]): number[] {
           isEdited: !!a.manualSchedule
         });
 
-        scheduleData.forEach((on, idx) => {
-          if (on === 1) { // Only count if they're working this day
-            if (schedule.type === '12-hour') {
-              dailyCoverage[idx] += 1;
-            } else {
-              // Check if there's an override for this specific day
-              const override = schedule.staffScheduleOverrides?.[posId]?.[person.id]?.[idx];
-              
-              if (override) {
-                // Use the override to determine which shift
-                const shiftFromOverride = getShiftFromTimeLabel(override);
-                if (shiftFromOverride === 'AM') {
-                  amCoverage[idx] += 1;
-                } else if (shiftFromOverride === 'PM') {
-                  pmCoverage[idx] += 1;
-                }
-                // If 'OFF' or null, don't count in coverage
+        // Check if staff is on light duty - if so, don't count towards coverage
+        const isLightDuty = schedule.staffLightDuty?.[posId]?.[person.id];
+        
+        if (!isLightDuty) {
+          scheduleData.forEach((on, idx) => {
+            if (on === 1) { // Only count if they're working this day
+              if (schedule.type === '12-hour') {
+                dailyCoverage[idx] += 1;
               } else {
-                // No override, use assigned shift
-                if (a.shift === 'AM') amCoverage[idx] += 1;
-                if (a.shift === 'PM') pmCoverage[idx] += 1;
+                // Check if there's an override for this specific day
+                const override = schedule.staffScheduleOverrides?.[posId]?.[person.id]?.[idx];
+                
+                if (override) {
+                  // Use the override to determine which shift
+                  const shiftFromOverride = getShiftFromTimeLabel(override);
+                  if (shiftFromOverride === 'AM') {
+                    amCoverage[idx] += 1;
+                  } else if (shiftFromOverride === 'PM') {
+                    pmCoverage[idx] += 1;
+                  }
+                  // If 'OFF' or null, don't count in coverage
+                } else {
+                  // No override, use assigned shift
+                  if (a.shift === 'AM') amCoverage[idx] += 1;
+                  if (a.shift === 'PM') pmCoverage[idx] += 1;
+                }
               }
             }
-          }
-        });
+          });
+        }
       }
 
       // Process simulated staff in this position

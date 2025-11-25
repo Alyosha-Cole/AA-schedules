@@ -1,43 +1,30 @@
 <script lang="ts">
-  import { Printer, GripVertical, Plus, Trash2, Download, Upload, Pencil, X, Copy, ClipboardPaste, GripHorizontal } from 'lucide-svelte';
+  import { GripVertical, Plus, Trash2, Pencil, X, Copy, ClipboardPaste, GripHorizontal, Download, Upload } from 'lucide-svelte';
+  import { createEventDispatcher } from 'svelte';
 
-  export let dates: any[];
-  export let onPrint: () => void;
+  const dispatch = createEventDispatcher();
 
-  // Column definition with IDs for drag-and-drop
-  let columns = [
-    { id: 'weekdayTime', name: 'Weekday Time', type: 'time', group: 'weekday' },
-    { id: 'mon', name: 'Monday', type: 'day', dayIndex: 0, group: 'weekday' },
-    { id: 'tue', name: 'Tuesday', type: 'day', dayIndex: 1, group: 'weekday' },
-    { id: 'wed', name: 'Wednesday', type: 'day', dayIndex: 2, group: 'weekday' },
-    { id: 'thu', name: 'Thursday', type: 'day', dayIndex: 3, group: 'weekday' },
-    { id: 'fri', name: 'Friday', type: 'day', dayIndex: 4, group: 'weekday' },
-    { id: 'weekendTime', name: 'Weekend Time', type: 'time', group: 'weekend' },
-    { id: 'sat', name: 'Saturday', type: 'day', dayIndex: 5, group: 'weekend' },
-    { id: 'sun', name: 'Sunday', type: 'day', dayIndex: 6, group: 'weekend' },
-  ];
-
-  // Combined time slots with weekday/weekend indicators - now mutable
-  let timeSlots = [
-    { id: 1, weekdayTime: '7:00-7:15 AM', weekendTime: '8:00-8:25 AM', weekdays: 'Wake up-Hygiene', weekend: 'Wake up-Hygiene' },
-    { id: 2, weekdayTime: '7:15-7:30 AM', weekendTime: '8:30-9:00 AM', weekdays: 'Room Clean', weekend: 'Breakfast/Med pass' },
-    { id: 3, weekdayTime: '7:30-8:00 AM', weekendTime: '9:15-10:30 AM', weekdays: 'Morning Check-in', weekend: 'Staff led group' },
-    { id: 4, weekdayTime: '8:00-8:25 AM', weekendTime: '11:00 AM-12:00 PM', weekdays: 'Med pass', weekend: 'Rec Time' },
-    { id: 5, weekdayTime: '8:30-8:50 AM', weekendTime: '12:00-12:30 PM', weekdays: 'Goal of the day', weekend: 'Major Clean-Up' },
-    { id: 6, weekdayTime: '9:00-11:25 AM', weekendTime: '12:30-12:50 PM', weekdays: 'School', weekend: 'Lunch' },
-    { id: 7, weekdayTime: '11:00-1:00 PM', weekendTime: '1:00-2:00 PM', weekdays: 'Lunch Periods', weekend: 'Writing Skills' },
-    { id: 8, weekdayTime: '1:00-2:30 PM', weekendTime: '2:00-2:50 PM', weekdays: 'School', weekend: 'TV Program' },
-    { id: 9, weekdayTime: '2:30-3:20 PM', weekendTime: '3:00-4:00 PM', weekdays: 'Group Session', weekend: 'Rec-Time' },
-    { id: 10, weekdayTime: '3:20-4:20 PM', weekendTime: '4:00-5:00 PM', weekdays: 'Rec-Time', weekend: 'Board Games' },
-    { id: 11, weekdayTime: '4:30-4:50 PM', weekendTime: '5:00-5:20 PM', weekdays: 'Unstructured Time', weekend: 'Dinner' },
-    { id: 12, weekdayTime: '5:00-5:20 PM', weekendTime: '5:30-5:50 PM', weekdays: 'Dinner', weekend: 'Unstructured time' },
-    { id: 13, weekdayTime: '5:30-6:30 PM', weekendTime: '6:00-7:00 PM', weekdays: 'Showers', weekend: 'Showers' },
-    { id: 14, weekdayTime: '6:30-7:45 PM', weekendTime: '7:00-7:45 PM', weekdays: 'PM Check-in/Med pass', weekend: 'PM Check-in/Med pass' },
-    { id: 15, weekdayTime: '8:00 PM', weekendTime: '8:00 PM', weekdays: 'Bed Time', weekend: 'Bed Time' },
-  ];
-
-  // Schedule data: [slotId][dayIndex] = activity description
-  let scheduleData: Record<number, Record<number, string>> = {};
+  // Props - schedule data comes from parent
+  export let columns: Array<{
+    id: string;
+    name: string;
+    type: 'time' | 'day';
+    dayIndex?: number;
+    group?: string;
+  }>;
+  
+  export let timeSlots: Array<{
+    id: number;
+    weekdayTime: string;
+    weekendTime: string;
+    weekdays: string;
+    weekend: string;
+  }>;
+  
+  export let scheduleData: Record<number, Record<number, string>>;
+  
+  export let unitName: string = 'Schedule';
+  export let columnClipboard: { columnId: string; data: Record<number, string>; timeData?: string[] } | null = null;
 
   // Row Drag state
   let dragItem: number | null = null;
@@ -52,30 +39,8 @@
   let editingColumn: typeof columns[0] | null = null;
   let editColumnName = '';
 
-  // Column clipboard for copy/paste
-  let columnClipboard: { columnId: string; data: Record<number, string>; timeData?: string[] } | null = null;
-
-  // Next ID for new rows
-  let nextId = 16;
-
   // File input for import
   let fileInput: HTMLInputElement;
-
-  // Initialize with defaults
-  function initializeSchedule() {
-    timeSlots.forEach(slot => {
-      scheduleData[slot.id] = {};
-      for (let i = 0; i < 7; i++) {
-        if (i < 5) {
-          scheduleData[slot.id][i] = slot.weekdays;
-        } else {
-          scheduleData[slot.id][i] = slot.weekend;
-        }
-      }
-    });
-  }
-
-  initializeSchedule();
 
   // === ROW DRAG AND DROP ===
   function onDragStart(slotId: number, e: DragEvent) {
@@ -88,10 +53,7 @@
 
   function onDragOver(idx: number, e: DragEvent) {
     e.preventDefault();
-    if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = 'move';
-    }
-    // Only set drag over if we're dragging a row
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
     if (dragItem !== null) {
       dragOverIndex = idx;
     }
@@ -113,7 +75,7 @@
         const newSlots = [...timeSlots];
         const [movedSlot] = newSlots.splice(fromIndex, 1);
         newSlots.splice(toIndex, 0, movedSlot);
-        timeSlots = newSlots;
+        dispatch('updateTimeSlots', newSlots);
       }
     }
     dragItem = null;
@@ -135,10 +97,7 @@
 
   function onColDragOver(colId: string, e: DragEvent) {
     e.preventDefault();
-    if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = 'move';
-    }
-    // Only set drag over if we're dragging a column
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
     if (colDragItem !== null) {
       colDragOverId = colId;
     }
@@ -160,7 +119,7 @@
         const newCols = [...columns];
         const [movedCol] = newCols.splice(fromIndex, 1);
         newCols.splice(toIndex, 0, movedCol);
-        columns = newCols;
+        dispatch('updateColumns', newCols);
       }
     }
     colDragItem = null;
@@ -188,8 +147,9 @@
     if (editingColumn && editColumnName.trim()) {
       const idx = columns.findIndex(c => c.id === editingColumn!.id);
       if (idx !== -1) {
-        columns[idx] = { ...columns[idx], name: editColumnName.trim() };
-        columns = columns; // Trigger reactivity
+        const newCols = [...columns];
+        newCols[idx] = { ...newCols[idx], name: editColumnName.trim() };
+        dispatch('updateColumns', newCols);
       }
     }
     closeColumnModal();
@@ -198,20 +158,18 @@
   function deleteColumn() {
     if (!editingColumn) return;
     
-    // Don't allow deleting time columns
     if (editingColumn.type === 'time') {
       alert('Cannot delete time columns');
       return;
     }
     
-    // Don't allow deleting if it's the last day column
     const dayColumns = columns.filter(c => c.type === 'day');
     if (dayColumns.length <= 1) {
       alert('Cannot delete the last day column');
       return;
     }
     
-    columns = columns.filter(c => c.id !== editingColumn!.id);
+    dispatch('updateColumns', columns.filter(c => c.id !== editingColumn!.id));
     closeColumnModal();
   }
 
@@ -219,25 +177,23 @@
     if (!editingColumn) return;
     
     if (editingColumn.type === 'time') {
-      // Copy time column data
       const isWeekdayTime = editingColumn.id === 'weekdayTime';
       const timeData = timeSlots.map(slot => isWeekdayTime ? slot.weekdayTime : slot.weekendTime);
-      columnClipboard = {
+      dispatch('updateClipboard', {
         columnId: editingColumn.id,
         data: {},
         timeData
-      };
+      });
     } else {
-      // Copy day column data
       const dayIndex = editingColumn.dayIndex!;
       const data: Record<number, string> = {};
       timeSlots.forEach(slot => {
         data[slot.id] = scheduleData[slot.id]?.[dayIndex] || '';
       });
-      columnClipboard = {
+      dispatch('updateClipboard', {
         columnId: editingColumn.id,
         data
-      };
+      });
     }
     
     alert(`Column "${editingColumn.name}" copied to clipboard!`);
@@ -250,9 +206,8 @@
     }
     
     if (editingColumn.type === 'time' && columnClipboard.timeData) {
-      // Paste time data
       const isWeekdayTime = editingColumn.id === 'weekdayTime';
-      timeSlots = timeSlots.map((slot, idx) => {
+      const newSlots = timeSlots.map((slot, idx) => {
         const newSlot = { ...slot };
         if (isWeekdayTime) {
           newSlot.weekdayTime = columnClipboard!.timeData![idx] || '';
@@ -261,15 +216,16 @@
         }
         return newSlot;
       });
+      dispatch('updateTimeSlots', newSlots);
     } else if (editingColumn.type === 'day') {
-      // Paste day column data
       const dayIndex = editingColumn.dayIndex!;
+      const newScheduleData = { ...scheduleData };
       timeSlots.forEach(slot => {
-        if (scheduleData[slot.id]) {
-          scheduleData[slot.id][dayIndex] = columnClipboard!.data[slot.id] || '';
+        if (newScheduleData[slot.id]) {
+          newScheduleData[slot.id] = { ...newScheduleData[slot.id], [dayIndex]: columnClipboard!.data[slot.id] || '' };
         }
       });
-      scheduleData = scheduleData; // Trigger reactivity
+      dispatch('updateScheduleData', newScheduleData);
     }
     
     alert(`Pasted data into column "${editingColumn.name}"!`);
@@ -277,20 +233,7 @@
 
   // Add new row
   function addRow() {
-    const newSlot = {
-      id: nextId++,
-      weekdayTime: '',
-      weekendTime: '',
-      weekdays: '',
-      weekend: ''
-    };
-    timeSlots = [...timeSlots, newSlot];
-    
-    // Initialize schedule data for new row
-    scheduleData[newSlot.id] = {};
-    for (let i = 0; i < 7; i++) {
-      scheduleData[newSlot.id][i] = '';
-    }
+    dispatch('addRow');
   }
 
   // Delete row
@@ -299,129 +242,158 @@
       alert('Cannot delete the last row');
       return;
     }
-    timeSlots = timeSlots.filter(s => s.id !== slotId);
-    delete scheduleData[slotId];
+    dispatch('deleteRow', slotId);
   }
 
   // Add new column
   function addColumn() {
-    const newId = `custom_${Date.now()}`;
-    const newDayIndex = Math.max(...columns.filter(c => c.type === 'day').map(c => c.dayIndex ?? -1)) + 1;
-    
-    const newCol = {
-      id: newId,
-      name: `Day ${newDayIndex + 1}`,
-      type: 'day' as const,
-      dayIndex: newDayIndex,
-      group: 'custom' as const
-    };
-    
-    columns = [...columns, newCol];
-    
-    // Initialize schedule data for new column
-    timeSlots.forEach(slot => {
-      if (scheduleData[slot.id]) {
-        scheduleData[slot.id][newDayIndex] = '';
-      }
-    });
+    dispatch('addColumn');
   }
 
-  // Export to CSV (Excel-compatible)
-  function exportToExcel() {
-    // Create CSV header based on current column order
-    let headers = columns.map(c => c.name);
-    let csv = headers.join(',') + '\n';
-    
-    // Add each row
-    timeSlots.forEach(slot => {
-      const row = columns.map(col => {
-        if (col.id === 'weekdayTime') return slot.weekdayTime || '';
-        if (col.id === 'weekendTime') return slot.weekendTime || '';
-        if (col.type === 'day' && col.dayIndex !== undefined) {
-          return scheduleData[slot.id]?.[col.dayIndex] || '';
+  // Get cell value based on column type
+  function getCellValue(slot: typeof timeSlots[0], col: typeof columns[0]): string {
+    if (col.id === 'weekdayTime') return slot.weekdayTime;
+    if (col.id === 'weekendTime') return slot.weekendTime;
+    if (col.type === 'day' && col.dayIndex !== undefined) {
+      return scheduleData[slot.id]?.[col.dayIndex] || '';
+    }
+    return '';
+  }
+
+  function setCellValue(slot: typeof timeSlots[0], col: typeof columns[0], value: string) {
+    if (col.id === 'weekdayTime') {
+      const newSlots = timeSlots.map(s => s.id === slot.id ? { ...s, weekdayTime: value } : s);
+      dispatch('updateTimeSlots', newSlots);
+    } else if (col.id === 'weekendTime') {
+      const newSlots = timeSlots.map(s => s.id === slot.id ? { ...s, weekendTime: value } : s);
+      dispatch('updateTimeSlots', newSlots);
+    } else if (col.type === 'day' && col.dayIndex !== undefined) {
+      const newScheduleData = { ...scheduleData };
+      if (newScheduleData[slot.id]) {
+        newScheduleData[slot.id] = { ...newScheduleData[slot.id], [col.dayIndex]: value };
+      }
+      dispatch('updateScheduleData', newScheduleData);
+    }
+  }
+
+  // Export to Excel with formatting
+  async function exportToExcel() {
+    try {
+      // Dynamically import SheetJS
+      const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+      
+      // Prepare data
+      const headers = columns.map(c => c.name);
+      const data: any[][] = [headers];
+      
+      timeSlots.forEach(slot => {
+        const row = columns.map(col => {
+          if (col.id === 'weekdayTime') return slot.weekdayTime || '';
+          if (col.id === 'weekendTime') return slot.weekendTime || '';
+          if (col.type === 'day' && col.dayIndex !== undefined) {
+            return scheduleData[slot.id]?.[col.dayIndex] || '';
+          }
+          return '';
+        });
+        data.push(row);
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(data);
+
+      // Set column widths
+      const colWidths = columns.map(col => {
+        if (col.type === 'time') {
+          return { wch: 18 }; // Width for time columns
+        } else {
+          return { wch: 25 }; // Width for day columns
         }
-        return '';
       });
-      // Escape commas in cell values
-      csv += row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',') + '\n';
-    });
+      ws['!cols'] = colWidths;
 
-    // Download
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `National3_Schedule_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
+      // Set row heights to accommodate wrapped text
+      const rowHeights = data.map((_, idx) => {
+        if (idx === 0) return { hpt: 30 }; // Header row height
+        return { hpt: 60 }; // Data row height
+      });
+      ws['!rows'] = rowHeights;
 
-  // Import from CSV/Excel
-  function importFromExcel(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split('\n');
+      // Apply styling to all cells
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
       
-      if (lines.length < 2) {
-        alert('Invalid file format');
-        return;
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellAddress]) continue;
+          
+          // Initialize cell style
+          ws[cellAddress].s = {
+            alignment: {
+              vertical: 'top',
+              horizontal: 'left',
+              wrapText: true
+            },
+            border: {
+              top: { style: 'thin', color: { rgb: '000000' } },
+              bottom: { style: 'thin', color: { rgb: '000000' } },
+              left: { style: 'thin', color: { rgb: '000000' } },
+              right: { style: 'thin', color: { rgb: '000000' } }
+            },
+            font: {
+              name: 'Arial',
+              sz: 11
+            }
+          };
+
+          // Header row styling
+          if (R === 0) {
+            ws[cellAddress].s.fill = {
+              fgColor: { rgb: '334155' } // Slate-700 color
+            };
+            ws[cellAddress].s.font = {
+              name: 'Arial',
+              sz: 11,
+              bold: true,
+              color: { rgb: 'FFFFFF' }
+            };
+            ws[cellAddress].s.alignment = {
+              vertical: 'center',
+              horizontal: 'center',
+              wrapText: true
+            };
+          }
+          
+          // Time column styling (light gray background)
+          const col = columns[C];
+          if (col && col.type === 'time' && R > 0) {
+            ws[cellAddress].s.fill = {
+              fgColor: { rgb: 'F1F5F9' } // Slate-100 color
+            };
+            ws[cellAddress].s.font = {
+              name: 'Arial',
+              sz: 10,
+              bold: true
+            };
+          }
+        }
       }
 
-      // Skip header row
-      const dataLines = lines.slice(1).filter(line => line.trim());
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Schedule');
+
+      // Generate Excel file and download
+      XLSX.writeFile(wb, `${unitName.replace(/\s+/g, '_')}_Schedule_${new Date().toISOString().split('T')[0]}.xlsx`);
       
-      // Clear existing data
-      timeSlots = [];
-      scheduleData = {};
-      
-      // Parse each row
-      dataLines.forEach((line, index) => {
-        const cells = parseCSVLine(line);
-        if (cells.length < 9) return; // Skip incomplete rows
-        
-        const newId = index + 1;
-        const newSlot = {
-          id: newId,
-          weekdayTime: cells[0],
-          weekendTime: cells[6],
-          weekdays: cells[1], // Default from Monday
-          weekend: cells[7]   // Default from Saturday
-        };
-        
-        timeSlots.push(newSlot);
-        
-        // Set schedule data for all days
-        scheduleData[newId] = {
-          0: cells[1], // Mon
-          1: cells[2], // Tue
-          2: cells[3], // Wed
-          3: cells[4], // Thu
-          4: cells[5], // Fri
-          5: cells[7], // Sat
-          6: cells[8]  // Sun
-        };
-      });
-      
-      nextId = timeSlots.length + 1;
-      timeSlots = timeSlots; // Trigger reactivity
-      
-      alert('Schedule imported successfully!');
-    };
-    
-    reader.readAsText(file);
-    input.value = ''; // Reset input
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export Excel file. Please try again.');
+    }
   }
 
   // Parse CSV line handling quoted fields with commas
   function parseCSVLine(line: string): string[] {
-    const result = [];
+    const result: string[] = [];
     let current = '';
     let inQuotes = false;
     
@@ -448,32 +420,109 @@
     return result;
   }
 
-  // Get cell value based on column type
-  function getCellValue(slot: typeof timeSlots[0], col: typeof columns[0]): string {
-    if (col.id === 'weekdayTime') return slot.weekdayTime;
-    if (col.id === 'weekendTime') return slot.weekendTime;
-    if (col.type === 'day' && col.dayIndex !== undefined) {
-      return scheduleData[slot.id]?.[col.dayIndex] || '';
-    }
-    return '';
-  }
+  // Import from CSV
+  async function importFromExcel(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
 
-  function setCellValue(slot: typeof timeSlots[0], col: typeof columns[0], value: string) {
-    if (col.id === 'weekdayTime') {
-      const idx = timeSlots.findIndex(s => s.id === slot.id);
-      if (idx !== -1) {
-        timeSlots[idx] = { ...timeSlots[idx], weekdayTime: value };
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+    if (fileExtension === 'xlsx') {
+      // Handle Excel file
+      try {
+        const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+        
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+        
+        if (data.length < 2) {
+          alert('Invalid file format - no data found');
+          return;
+        }
+
+        // First row is headers
+        const headerCells = data[0].map(cell => String(cell || ''));
+        
+        // Update column names from header
+        const updatedColumns = columns.map((col, index) => {
+          if (headerCells[index]) {
+            return { ...col, name: headerCells[index] };
+          }
+          return col;
+        });
+
+        // Remaining rows are data (convert all cells to strings)
+        const dataLines = data.slice(1)
+          .filter(row => row && row.length > 0)
+          .map(row => row.map(cell => String(cell || '')));
+        
+        if (dataLines.length === 0) {
+          alert('No data found in file');
+          return;
+        }
+
+        // Send parsed data along with updated column structure
+        dispatch('importData', { 
+          dataLines, 
+          columns: updatedColumns 
+        });
+        
+        alert('Schedule imported successfully!');
+      } catch (error) {
+        console.error('Import failed:', error);
+        alert('Failed to import Excel file. Please try again.');
       }
-    } else if (col.id === 'weekendTime') {
-      const idx = timeSlots.findIndex(s => s.id === slot.id);
-      if (idx !== -1) {
-        timeSlots[idx] = { ...timeSlots[idx], weekendTime: value };
-      }
-    } else if (col.type === 'day' && col.dayIndex !== undefined) {
-      if (scheduleData[slot.id]) {
-        scheduleData[slot.id][col.dayIndex] = value;
-      }
+    } else {
+      // Handle CSV file (original logic)
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        const lines = text.split('\n');
+        
+        if (lines.length < 2) {
+          alert('Invalid file format');
+          return;
+        }
+
+        // Parse the header row to get column names
+        const headerLine = lines[0];
+        const headerCells = parseCSVLine(headerLine);
+        
+        // Update column names from header
+        const updatedColumns = columns.map((col, index) => {
+          if (headerCells[index]) {
+            return { ...col, name: headerCells[index] };
+          }
+          return col;
+        });
+
+        // Parse all data lines (skip header)
+        const dataLines = lines
+          .slice(1)
+          .filter(line => line.trim())
+          .map(line => parseCSVLine(line));
+        
+        if (dataLines.length === 0) {
+          alert('No data found in file');
+          return;
+        }
+
+        // Send parsed data along with updated column structure
+        dispatch('importData', { 
+          dataLines, 
+          columns: updatedColumns 
+        });
+        
+        alert('Schedule imported successfully!');
+      };
+      
+      reader.readAsText(file);
     }
+    
+    input.value = '';
   }
 </script>
 
@@ -494,6 +543,7 @@
 
   .drag-row {
     transition: all 0.2s;
+    cursor: move;
   }
 
   .drag-row.dragging {
@@ -505,11 +555,6 @@
     border-top: 3px solid #3b82f6;
   }
 
-  .drag-row {
-    cursor: move;
-  }
-
-  /* Column drag styles */
   .drag-col {
     transition: all 0.2s;
     position: relative;
@@ -550,7 +595,6 @@
     opacity: 1;
   }
 
-  /* Modal styles */
   .modal-overlay {
     position: fixed;
     inset: 0;
@@ -603,15 +647,10 @@
             on:dragend={onColDragEnd}
           >
             <div class="col-header-content">
-              <!-- Drag handle -->
               <div class="col-drag-handle print:hidden">
                 <GripHorizontal class="w-3 h-3 text-slate-300" />
               </div>
-              
-              <!-- Column name -->
               <div class="font-bold text-[9px]">{col.name}</div>
-              
-              <!-- Edit button -->
               <button 
                 class="col-edit-btn print:hidden p-0.5 rounded hover:bg-slate-600 transition-colors"
                 on:click|stopPropagation={() => openColumnModal(col)}
@@ -646,7 +685,6 @@
           <!-- Dynamic columns based on current order -->
           {#each columns as col (col.id)}
             {#if col.type === 'time'}
-              <!-- Time column (editable input) -->
               <td class="border-2 border-slate-900 bg-slate-100 px-1 py-1 align-top">
                 <input
                   type="text"
@@ -657,7 +695,6 @@
                 />
               </td>
             {:else}
-              <!-- Day column (editable textarea) -->
               <td class="editable-cell border-2 border-slate-900 px-1 py-1 align-top">
                 <textarea
                   value={getCellValue(slot, col)}
@@ -716,7 +753,7 @@
       Import from Excel
       <input
         type="file"
-        accept=".csv"
+        accept=".csv,.xlsx"
         bind:this={fileInput}
         on:change={importFromExcel}
         class="hidden"
@@ -729,7 +766,7 @@
     <div class="mt-2 text-sm text-slate-600 print:hidden">
       <span class="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded">
         <Copy class="w-3 h-3" />
-        Clipboard: "{columns.find(c => c.id === columnClipboard?.columnId)?.name || 'Column'}" data ready to paste
+        Clipboard: Column data ready to paste
       </span>
     </div>
   {/if}
@@ -737,13 +774,21 @@
 
 <!-- Column Edit Modal -->
 {#if showColumnModal && editingColumn}
-  <div class="modal-overlay" on:click={closeColumnModal} on:keydown={(e) => e.key === 'Escape' && closeColumnModal()}>
-    <div class="modal-content" on:click|stopPropagation>
+  <div 
+    class="modal-overlay" 
+    on:click={closeColumnModal} 
+    on:keydown={(e) => e.key === 'Escape' && closeColumnModal()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="column-modal-title"
+  >
+    <div class="modal-content" on:click|stopPropagation role="document">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-slate-800">Edit Column</h3>
+        <h3 id="column-modal-title" class="text-lg font-bold text-slate-800">Edit Column</h3>
         <button 
           on:click={closeColumnModal}
           class="p-1 rounded hover:bg-slate-100 transition-colors"
+          aria-label="Close modal"
         >
           <X class="w-5 h-5 text-slate-500" />
         </button>
@@ -751,8 +796,9 @@
       
       <!-- Column Name -->
       <div class="mb-4">
-        <label class="block text-sm font-medium text-slate-700 mb-1">Column Name</label>
+        <label for="column-name-input" class="block text-sm font-medium text-slate-700 mb-1">Column Name</label>
         <input
+          id="column-name-input"
           type="text"
           bind:value={editColumnName}
           class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -799,7 +845,6 @@
         {/if}
       </div>
       
-      <!-- Help text -->
       <p class="mt-4 text-xs text-slate-500">
         Tip: Drag columns by the grip handle to reorder them. Copy a column's data and paste it into another column.
       </p>

@@ -61,7 +61,77 @@
     }
   }
 
+  // Initialize light duty tracking if not present
+  $: {
+    if (!schedule.staffLightDuty) {
+      schedule.staffLightDuty = {};
+    }
+    if (!schedule.staffLightDuty[positionId]) {
+      schedule.staffLightDuty[positionId] = {};
+    }
+  }
+
   $: staffOverrides = schedule.staffScheduleOverrides[positionId][staffId];
+  $: isLightDuty = schedule.staffLightDuty?.[positionId]?.[staffId] || false;
+
+  function toggleLightDuty() {
+    if (!schedule.staffLightDuty) {
+      schedule.staffLightDuty = {};
+    }
+    if (!schedule.staffLightDuty[positionId]) {
+      schedule.staffLightDuty[positionId] = {};
+    }
+    
+    // Toggle the value
+    schedule.staffLightDuty[positionId][staffId] = !schedule.staffLightDuty[positionId][staffId];
+    
+    // Trigger reactivity
+    schedule = schedule;
+    dispatch('scheduleChanged');
+  }
+
+  // Helper function to get the default time label from advanced settings
+  function getDefaultTimeLabel(isWorking: boolean): string {
+    if (!isWorking) {
+      return 'OFF';
+    }
+    
+    const assignment = schedule.positionAssignments?.[positionId]?.[staffId];
+    
+    // Get time options from advanced settings
+    const options = sortedTimeOptions;
+    const workOptions = options.filter(opt => opt.label !== 'OFF' && opt.label !== 'PTO');
+    
+    if (schedule.type === '12-hour') {
+      // Find the first non-OFF/PTO option for 12-hour schedules
+      return workOptions[0]?.label || '8:30a-8:30p';
+    } else {
+      // For 10-hour schedules, find the appropriate AM or PM option
+      const shift = assignment?.shift || 'AM';
+      
+      let matchingOption;
+      if (shift === 'AM') {
+        // Look for AM-style options (start times before noon)
+        matchingOption = workOptions.find(opt => {
+          const label = opt.label.toLowerCase();
+          return /^\d{1,2}(:\d{2})?a/.test(label) || label.includes('7a') || label.includes('8a') || label.includes('9a') || label.includes('10a') || label.includes('11a');
+        });
+      } else {
+        // Look for PM-style options (start times at noon or after)
+        matchingOption = workOptions.find(opt => {
+          const label = opt.label.toLowerCase();
+          return /^\d{1,2}(:\d{2})?p/.test(label) || label.includes('12p') || label.includes('1p') || label.includes('2p') || label.includes('3p');
+        });
+      }
+      
+      if (matchingOption) {
+        return matchingOption.label;
+      }
+      
+      // Fallback: use first work option or hardcoded default
+      return workOptions[0]?.label || (shift === 'AM' ? '7a-5p' : '1p-11p');
+    }
+  }
 
   // Get the display value for a specific day - should show what's actually in the schedule
   function getDayValue(dayIndex: number): string {
@@ -73,33 +143,13 @@
     // Use the generated schedule to determine if they're working
     const isWorking = actualSchedule[dayIndex] === 1;
     
-    if (isWorking) {
-      // Working - determine the shift time
-      const assignment = schedule.positionAssignments?.[positionId]?.[staffId];
-      if (schedule.type === '12-hour') {
-        return '8:30a-8:30p';
-      } else {
-        return assignment?.shift === 'AM' ? '7a-5p' : '1p-11p';
-      }
-    } else {
-      // Not working
-      return 'OFF';
-    }
+    return getDefaultTimeLabel(isWorking);
   }
 
   function handleDayChange(dayIndex: number, value: string) {
     // Determine what the default value would be without override
     const isWorking = actualSchedule[dayIndex] === 1;
-    const assignment = schedule.positionAssignments?.[positionId]?.[staffId];
-    let defaultValue = 'OFF';
-    
-    if (isWorking) {
-      if (schedule.type === '12-hour') {
-        defaultValue = '8:30a-8:30p';
-      } else {
-        defaultValue = assignment?.shift === 'AM' ? '7a-5p' : '1p-11p';
-      }
-    }
+    const defaultValue = getDefaultTimeLabel(isWorking);
     
     // If the new value matches the default, remove the override
     if (value === defaultValue) {
@@ -135,6 +185,33 @@
 
     <!-- Content -->
     <div class="flex-1 overflow-y-auto p-6">
+      <!-- Light Duty Toggle -->
+      <div class="mb-6 p-4 border rounded-lg transition-colors {isLightDuty ? 'bg-yellow-50 border-yellow-400' : 'bg-slate-50 border-slate-300'}">
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <span class="font-semibold text-slate-800">Light Duty</span>
+            <p class="text-xs text-slate-600 mt-1">
+              When enabled, this staff member will not count towards coverage requirements.
+            </p>
+          </div>
+          <button
+            on:click={toggleLightDuty}
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {isLightDuty ? 'bg-yellow-500' : 'bg-slate-300'}"
+            role="switch"
+            aria-checked={isLightDuty}
+          >
+            <span
+              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {isLightDuty ? 'translate-x-6' : 'translate-x-1'}"
+            ></span>
+          </button>
+        </label>
+        {#if isLightDuty}
+          <div class="mt-2 text-xs text-yellow-700 font-medium">
+            ⚠️ This staff member is on light duty and excluded from coverage counts.
+          </div>
+        {/if}
+      </div>
+
       <div class="mb-4">
         <p class="text-sm text-slate-600 mb-4">
           Set custom schedules for each day. Changes will override the default schedule pattern for this staff member.

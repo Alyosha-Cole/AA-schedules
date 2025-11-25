@@ -199,35 +199,63 @@
     // Check for individual staff override first
     const override = schedule.staffScheduleOverrides?.[positionId]?.[staffId]?.[dayIndex];
     
-    console.log('getCurrentTimeLabel:', {
-      positionId,
-      staffId,
-      dayIndex,
-      working,
-      hasOverride: !!override,
-      overrideValue: override,
-      willReturn: override || (working ? (schedule.type === '12-hour' ? '8:30a-8:30p' : 'shift-based') : 'OFF')
-    });
-    
     if (override) {
-      console.log('  → Returning override:', override);
       return override;
     }
     
     // Fall back to default based on working status
     if (working) {
       const assignment = schedule.positionAssignments?.[positionId]?.[staffId];
+      
+      // Get default time from advanced settings instead of hardcoded values
+      const timeOptions = getEffectiveTimeOptions(positionId);
+      
       if (schedule.type === '12-hour') {
-        console.log('  → Returning 12-hour default: 8:30a-8:30p');
-        return '8:30a-8:30p';
+        // Find the first non-OFF/PTO option for 12-hour schedules
+        const workOption = timeOptions.find(opt => 
+          opt.label !== 'OFF' && opt.label !== 'PTO'
+        );
+        return workOption?.label || '8:30a-8:30p';
       } else {
-        const label = assignment?.shift === 'AM' ? '7a-5p' : '1p-11p';
-        console.log('  → Returning shift-based default:', label);
-        return label;
+        // For 10-hour schedules, find the appropriate AM or PM option
+        const shift = assignment?.shift || 'AM';
+        
+        // Look for options that match the shift pattern
+        const workOptions = timeOptions.filter(opt => 
+          opt.label !== 'OFF' && opt.label !== 'PTO'
+        );
+        
+        let matchingOption;
+        if (shift === 'AM') {
+          // Look for AM-style options (start times before noon)
+          matchingOption = workOptions.find(opt => {
+            const label = opt.label.toLowerCase();
+            return /^\d{1,2}(:\d{2})?a/.test(label) || label.includes('7a') || label.includes('8a') || label.includes('9a') || label.includes('10a') || label.includes('11a');
+          });
+        } else {
+          // Look for PM-style options (start times at noon or after)
+          matchingOption = workOptions.find(opt => {
+            const label = opt.label.toLowerCase();
+            return /^\d{1,2}(:\d{2})?p/.test(label) || label.includes('12p') || label.includes('1p') || label.includes('2p') || label.includes('3p');
+          });
+        }
+        
+        // If we found a matching option, use it
+        if (matchingOption) {
+          return matchingOption.label;
+        }
+        
+        // Fallback: just use first non-OFF option or hardcoded default
+        const firstWorkOption = workOptions[0];
+        if (firstWorkOption) {
+          return firstWorkOption.label;
+        }
+        
+        // Ultimate fallback to hardcoded values
+        return shift === 'AM' ? '7a-5p' : '1p-11p';
       }
     }
     
-    console.log('  → Returning OFF (not working)');
     return 'OFF';
   }
 
@@ -883,6 +911,9 @@
                       >
                         {detail.name}
                       </button>
+                      {#if schedule.staffLightDuty?.[activePositionId]?.[detail.id]}
+                        <span class="text-[9px] font-bold text-yellow-600 bg-yellow-100 px-1 rounded whitespace-nowrap">LIGHT DUTY</span>
+                      {/if}
                     </div>
                   </div>
                   
@@ -1060,12 +1091,16 @@
               {@const shiftTime = schedule.type === '12-hour'
                 ? '8:30a-8:30p'
                 : (assignment?.shift === 'AM' ? '7a-5p' : '1p-11p')}
+              {@const isLightDuty = !detail.simulated && schedule.staffLightDuty?.[position.id]?.[detail.id]}
               
               <tr>
                 <td class="border border-slate-900 px-2 py-1 text-left">
                   <span class="font-medium">{detail.name}</span>
                   {#if teamLabel}
                     <span class="text-[6pt] ml-1">({teamLabel})</span>
+                  {/if}
+                  {#if isLightDuty}
+                    <span class="text-[5pt] ml-1 text-yellow-600 font-bold">LD</span>
                   {/if}
                 </td>
                 
@@ -1159,12 +1194,16 @@
               {@const shiftTime = schedule.type === '12-hour'
                 ? '8:30a-8:30p'
                 : (assignment?.shift === 'AM' ? '7a-5p' : '1p-11p')}
+              {@const isLightDuty = !detail.simulated && schedule.staffLightDuty?.[position.id]?.[detail.id]}
               
               <tr>
                 <td class="border border-slate-900 px-2 py-1 text-left">
                   <span class="font-medium">{detail.name}</span>
                   {#if teamLabel}
                     <span class="text-[6pt] ml-1">({teamLabel})</span>
+                  {/if}
+                  {#if isLightDuty}
+                    <span class="text-[5pt] ml-1 text-yellow-600 font-bold">LD</span>
                   {/if}
                 </td>
                 
