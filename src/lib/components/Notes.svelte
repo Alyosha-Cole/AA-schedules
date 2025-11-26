@@ -1,49 +1,168 @@
 <script lang="ts">
-  import { ChevronDown, ChevronRight } from 'lucide-svelte';
+  import { ChevronDown, ChevronRight, Settings } from 'lucide-svelte';
   import NotesList from './NotesList.svelte';
   import NotesForm from './NotesForm.svelte';
   import ViewNotes from './ViewNotes.svelte';
+  import AdvancedResidentSettings from './AdvancedResidentSettings.svelte';
 
   // State
   let currentView: 'entry' | 'view' = 'entry';
   let showResidentManagement = true;
+  let showAdvancedSettings = false;
+
+  // Unit names
+  const unitNames = ['Unit 1', 'Unit 2', 'Unit 3'];
+
+  // Default attribute settings
+  function getDefaultAttributes() {
+    return [
+      {
+        id: 'county',
+        name: 'County',
+        type: 'text' as const,
+        required: true,
+        order: 0,
+        showInHeader: true
+      },
+      {
+        id: 'level',
+        name: 'Level',
+        type: 'cycle' as const,
+        required: true,
+        options: [
+          { value: '0', label: 'Lvl 0', color: '#dc2626' },
+          { value: '1', label: 'Lvl 1', color: '#f59e0b' },
+          { value: '2', label: 'Lvl 2', color: '#16a34a' },
+          { value: '3', label: 'Lvl 3', color: '#2563eb' }
+        ],
+        order: 1,
+        showInHeader: true
+      }
+    ];
+  }
+
+  // Default note categories
+  function getDefaultNoteCategories() {
+    return [
+      {
+        id: 'positive',
+        name: 'Positive Behaviors',
+        color: '#16a34a',
+        order: 0,
+        checkboxes: [
+          { id: 'cb1', label: 'Participated in group activities' },
+          { id: 'cb2', label: 'Showed respect to staff' },
+          { id: 'cb3', label: 'Helped another resident' },
+          { id: 'cb4', label: 'Completed assigned tasks' },
+          { id: 'cb5', label: 'Displayed positive attitude' }
+        ]
+      },
+      {
+        id: 'general',
+        name: 'General Notes',
+        color: '#2563eb',
+        order: 1,
+        checkboxes: [
+          { id: 'cb6', label: 'Ate all meals' },
+          { id: 'cb7', label: 'Attended classes' },
+          { id: 'cb8', label: 'Participated in recreation' },
+          { id: 'cb9', label: 'Took medications' },
+          { id: 'cb10', label: 'Had visitor' }
+        ]
+      },
+      {
+        id: 'negative',
+        name: 'Behavioral Concerns',
+        color: '#d97706',
+        order: 2,
+        checkboxes: [
+          { id: 'cb11', label: 'Refused to follow directions' },
+          { id: 'cb12', label: 'Verbal altercation with peer' },
+          { id: 'cb13', label: 'Disruptive in class' },
+          { id: 'cb14', label: 'Property damage' },
+          { id: 'cb15', label: 'Left designated area without permission' }
+        ]
+      }
+    ];
+  }
+
+  // Resident settings per unit
+  let residentSettings: Record<string, {
+    inheritFrom: string | null;
+    attributes: Array<{
+      id: string;
+      name: string;
+      type: 'text' | 'cycle' | 'select';
+      required: boolean;
+      options?: Array<{ value: string; label: string; color: string }>;
+      order: number;
+      showInHeader: boolean;
+    }>;
+  }> = {};
+
+  // Initialize settings for each unit
+  for (const unit of unitNames) {
+    residentSettings[unit] = {
+      inheritFrom: null,
+      attributes: getDefaultAttributes()
+    };
+  }
+
+  // Note settings (categories and checkboxes)
+  let noteSettings: {
+    categories: Array<{
+      id: string;
+      name: string;
+      color: string;
+      order: number;
+      checkboxes: Array<{ id: string; label: string }>;
+    }>;
+  } = {
+    categories: getDefaultNoteCategories()
+  };
 
   // Residents per unit
   let residents: Record<string, Array<{
     id: number;
     firstName: string;
     lastName: string;
-    county: string;
-    level: number;
-  }>> = {
-    'Unit 1': [],
-    'Unit 2': [],
-    'Unit 3': []
-  };
+    attributes: Record<string, string>;
+  }>> = {};
+
+  // Initialize residents for each unit
+  for (const unit of unitNames) {
+    residents[unit] = [];
+  }
 
   // Reports
   let reports: Array<{
     residentId: number;
     firstName: string;
     lastName: string;
-    county: string;
-    level: number;
+    attributes: Record<string, string>;
     unit: string;
     timestamp: string;
-    positive?: string;
-    general?: string;
-    negative?: string;
+    notes: Record<string, string>;
   }> = [];
 
   // ID counters per unit
-  let idCounters: Record<string, number> = {
-    'Unit 1': 0,
-    'Unit 2': 0,
-    'Unit 3': 0
-  };
+  let idCounters: Record<string, number> = {};
+  for (const unit of unitNames) {
+    idCounters[unit] = 0;
+  }
 
-  function addResident(event: CustomEvent<{ unit: string; firstName: string; lastName: string; county: string }>) {
-    const { unit, firstName, lastName, county } = event.detail;
+  // Get effective attributes for a unit
+  function getEffectiveAttributes(unit: string) {
+    const settings = residentSettings[unit];
+    if (!settings) return [];
+    if (settings.inheritFrom && residentSettings[settings.inheritFrom]) {
+      return residentSettings[settings.inheritFrom].attributes || [];
+    }
+    return settings.attributes || [];
+  }
+
+  function addResident(event: CustomEvent<{ unit: string; firstName: string; lastName: string; attributes: Record<string, string> }>) {
+    const { unit, firstName, lastName, attributes } = event.detail;
     idCounters[unit] = (idCounters[unit] || 0) + 1;
     
     residents[unit] = [
@@ -52,12 +171,10 @@
         id: idCounters[unit],
         firstName,
         lastName,
-        county,
-        level: 0
+        attributes
       }
     ];
     
-    // Trigger reactivity
     residents = residents;
   }
 
@@ -67,10 +184,12 @@
     residents = residents;
   }
 
-  function updateLevel(event: CustomEvent<{ unit: string; id: number; level: number }>) {
-    const { unit, id, level } = event.detail;
+  function updateAttribute(event: CustomEvent<{ unit: string; id: number; attrId: string; value: string }>) {
+    const { unit, id, attrId, value } = event.detail;
     residents[unit] = residents[unit].map(r => 
-      r.id === id ? { ...r, level } : r
+      r.id === id 
+        ? { ...r, attributes: { ...r.attributes, [attrId]: value } }
+        : r
     );
     residents = residents;
   }
@@ -78,13 +197,33 @@
   function handleSubmitReports(event: CustomEvent<typeof reports>) {
     reports = [...reports, ...event.detail];
   }
+
+  function handleResidentSettingsChanged(event: CustomEvent<typeof residentSettings>) {
+    residentSettings = event.detail;
+  }
+
+  function handleNoteSettingsChanged(event: CustomEvent<typeof noteSettings>) {
+    noteSettings = event.detail;
+  }
 </script>
 
 <div class="notes-container">
   <!-- Header -->
   <div class="header">
-    <h1>Shift Report System</h1>
-    <p>Document resident activities and behaviors for probation reporting</p>
+    <div class="header-content">
+      <div>
+        <h1>Shift Report System</h1>
+        <p>Document resident activities and behaviors for probation reporting</p>
+      </div>
+      <button 
+        class="settings-btn"
+        on:click={() => showAdvancedSettings = true}
+        title="Configure resident attributes and note categories"
+      >
+        <Settings class="w-5 h-5" />
+        Settings
+      </button>
+    </div>
   </div>
 
   <!-- Navigation -->
@@ -125,13 +264,14 @@
       {#if showResidentManagement}
         <div class="management-content">
           <div class="units-grid">
-            {#each Object.keys(residents) as unit}
+            {#each unitNames as unit}
               <NotesList
                 {unit}
                 residents={residents[unit]}
+                attributeSettings={getEffectiveAttributes(unit)}
                 on:addResident={addResident}
                 on:deleteResident={deleteResident}
-                on:updateLevel={updateLevel}
+                on:updateAttribute={updateAttribute}
               />
             {/each}
           </div>
@@ -142,13 +282,27 @@
     <!-- Shift Report Entry Form -->
     <NotesForm 
       {residents}
+      {residentSettings}
+      {noteSettings}
       on:submit={handleSubmitReports}
     />
   {/if}
 
   <!-- View Reports -->
   {#if currentView === 'view'}
-    <ViewNotes {reports} />
+    <ViewNotes {reports} {residentSettings} {noteSettings} />
+  {/if}
+
+  <!-- Advanced Settings Modal -->
+  {#if showAdvancedSettings}
+    <AdvancedResidentSettings
+      units={unitNames}
+      {residentSettings}
+      {noteSettings}
+      on:close={() => showAdvancedSettings = false}
+      on:residentSettingsChanged={handleResidentSettingsChanged}
+      on:noteSettingsChanged={handleNoteSettingsChanged}
+    />
   {/if}
 </div>
 
@@ -181,18 +335,42 @@
     transform: translate(30%, -30%);
   }
 
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    position: relative;
+  }
+
   .header h1 {
     font-size: 2rem;
     font-weight: 700;
     margin-bottom: 0.5rem;
-    position: relative;
   }
 
   .header p {
     opacity: 0.9;
     font-size: 1rem;
-    position: relative;
     margin: 0;
+  }
+
+  .settings-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .settings-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
   }
 
   .nav-buttons {

@@ -1,84 +1,110 @@
 <script lang="ts">
-  import { Check } from 'lucide-svelte';
+  import { Check, Calendar } from 'lucide-svelte';
   import { createEventDispatcher } from 'svelte';
 
   export let residents: Record<string, Array<{
     id: number;
     firstName: string;
     lastName: string;
-    county: string;
-    level: number;
+    attributes: Record<string, string>;
   }>>;
+  
+  export let residentSettings: Record<string, {
+    inheritFrom: string | null;
+    attributes: Array<{
+      id: string;
+      name: string;
+      type: 'text' | 'cycle' | 'select';
+      required: boolean;
+      options?: Array<{ value: string; label: string; color: string }>;
+      order: number;
+      showInHeader: boolean;
+    }>;
+  }>;
+
+  export let noteSettings: {
+    categories: Array<{
+      id: string;
+      name: string;
+      color: string;
+      order: number;
+      checkboxes: Array<{ id: string; label: string }>;
+    }>;
+  };
 
   const dispatch = createEventDispatcher();
 
-  const POSITIVE_BEHAVIORS = [
-    'Participated in group activities',
-    'Showed respect to staff',
-    'Helped another resident',
-    'Completed assigned tasks',
-    'Displayed positive attitude'
-  ];
-
-  const GENERAL_NOTES = [
-    'Ate all meals',
-    'Attended classes',
-    'Participated in recreation',
-    'Took medications',
-    'Had visitor'
-  ];
-
-  const NEGATIVE_BEHAVIORS = [
-    'Refused to follow directions',
-    'Verbal altercation with peer',
-    'Disruptive in class',
-    'Property damage',
-    'Left designated area without permission'
-  ];
-
-  let activeUnit = 'Unit 1';
-  let formData: Record<string, { positive?: string; general?: string; negative?: string }> = {};
+  let activeUnit = Object.keys(residents)[0] || 'Unit 1';
+  let formData: Record<string, Record<string, string>> = {};
   let showSuccess = false;
+  
+  // Date selection - defaults to today
+  let selectedDate = new Date().toISOString().split('T')[0];
 
   $: unitResidents = residents[activeUnit] || [];
+  $: sortedCategories = [...(noteSettings?.categories || [])].sort((a, b) => a.order - b.order);
+  
+  // Get effective attributes for the active unit
+  $: effectiveAttributes = (() => {
+    const settings = residentSettings[activeUnit];
+    if (!settings) return [];
+    if (settings.inheritFrom && residentSettings[settings.inheritFrom]) {
+      return residentSettings[settings.inheritFrom].attributes || [];
+    }
+    return settings.attributes || [];
+  })();
+  
+  $: sortedAttributes = [...effectiveAttributes].sort((a, b) => a.order - b.order);
 
-  function handleTextChange(residentId: number, section: string, value: string) {
+  function getOptionDisplay(attrId: string, value: string) {
+    const attr = effectiveAttributes.find(a => a.id === attrId);
+    if (!attr?.options) return { label: value, color: '#6b7280' };
+    const option = attr.options.find(o => o.value === value);
+    return option || { label: value, color: '#6b7280' };
+  }
+
+  function handleTextChange(residentId: number, categoryId: string, value: string) {
     const key = `${activeUnit}-${residentId}`;
     formData = {
       ...formData,
       [key]: {
         ...formData[key],
-        [section]: value
+        [categoryId]: value
       }
     };
   }
 
-  function handleCheckboxToggle(residentId: number, section: string, text: string) {
+  function handleCheckboxToggle(residentId: number, categoryId: string, text: string) {
     const key = `${activeUnit}-${residentId}`;
-    const currentText = formData[key]?.[section as keyof typeof formData[string]] || '';
+    const currentText = formData[key]?.[categoryId] || '';
     const newText = currentText.includes(text)
       ? currentText.replace(text + '. ', '')
       : currentText + text + '. ';
 
-    handleTextChange(residentId, section, newText);
+    handleTextChange(residentId, categoryId, newText);
   }
 
-  function isChecked(residentId: number, section: string, text: string): boolean {
+  function isChecked(residentId: number, categoryId: string, text: string): boolean {
     const key = `${activeUnit}-${residentId}`;
-    return formData[key]?.[section as keyof typeof formData[string]]?.includes(text) || false;
+    return formData[key]?.[categoryId]?.includes(text) || false;
   }
 
-  function getFormValue(residentId: number, section: string): string {
+  function getFormValue(residentId: number, categoryId: string): string {
     const key = `${activeUnit}-${residentId}`;
-    return formData[key]?.[section as keyof typeof formData[string]] || '';
+    return formData[key]?.[categoryId] || '';
   }
 
   function handleSubmit() {
     const reportsToSubmit: any[] = [];
-    const timestamp = new Date().toISOString();
+    // Use selected date with current time
+    const dateObj = new Date(selectedDate + 'T' + new Date().toTimeString().split(' ')[0]);
+    const timestamp = dateObj.toISOString();
 
     Object.entries(formData).forEach(([key, data]) => {
-      if (data.positive || data.general || data.negative) {
+      // Check if any category has content
+      const hasContent = Object.values(data).some(v => v && v.trim());
+      
+      if (hasContent) {
         const [unit, residentIdStr] = key.split('-');
         const residentId = parseInt(residentIdStr);
         const resident = residents[unit]?.find(r => r.id === residentId);
@@ -88,11 +114,10 @@
             residentId,
             firstName: resident.firstName,
             lastName: resident.lastName,
-            county: resident.county,
-            level: resident.level,
+            attributes: { ...resident.attributes },
             unit,
             timestamp,
-            ...data
+            notes: { ...data } // Store all category data
           });
         }
       }
@@ -119,6 +144,22 @@
     </div>
   {/if}
 
+  <!-- Date Selection -->
+  <div class="date-selection">
+    <div class="date-picker-wrapper">
+      <Calendar class="w-5 h-5 text-slate-500" />
+      <label class="date-label">Report Date:</label>
+      <input
+        type="date"
+        bind:value={selectedDate}
+        class="date-input"
+      />
+      {#if selectedDate !== new Date().toISOString().split('T')[0]}
+        <span class="date-warning">⚠️ Not today's date</span>
+      {/if}
+    </div>
+  </div>
+
   <div class="unit-tabs">
     {#each Object.keys(residents) as unit}
       <button
@@ -131,7 +172,12 @@
     {/each}
   </div>
 
-  {#if unitResidents.length === 0}
+  {#if sortedCategories.length === 0}
+    <div class="empty-state">
+      <p>No note categories configured.</p>
+      <p class="empty-hint">Click the Settings button above to add categories like "Positive Behaviors", "General Notes", etc.</p>
+    </div>
+  {:else if unitResidents.length === 0}
     <div class="empty-state">
       <p>No residents in {activeUnit}.</p>
       <p class="empty-hint">Add residents in the "Manage Residents" section above.</p>
@@ -144,98 +190,66 @@
             <div class="resident-title">
               <h2 class="resident-name">{resident.firstName} {resident.lastName.charAt(0)}.</h2>
               <div class="resident-badges">
-                <span class="badge county-badge">{resident.county}</span>
-                <span class="badge level-badge level-{resident.level}">Lvl {resident.level}</span>
+                {#each sortedAttributes.filter(a => a.showInHeader) as attr}
+                  {@const value = resident.attributes[attr.id] || ''}
+                  {#if (attr.type === 'cycle' || attr.type === 'select') && attr.options}
+                    {@const display = getOptionDisplay(attr.id, value)}
+                    <span 
+                      class="badge"
+                      style="background-color: {display.color}20; color: {display.color}"
+                    >
+                      {display.label}
+                    </span>
+                  {:else if value}
+                    <span class="badge text-badge">{value}</span>
+                  {/if}
+                {/each}
               </div>
             </div>
             <span class="timestamp">
-              {formatDate(new Date(), { weekday: 'short', month: 'short', day: 'numeric' })}
+              {formatDate(new Date(selectedDate), { weekday: 'short', month: 'short', day: 'numeric' })}
             </span>
           </div>
 
-          <!-- Positive Behaviors -->
-          <div class="report-section">
-            <div class="section-label positive">
-              <span class="label-bar"></span>
-              Positive Behaviors
+          <!-- Dynamic Categories -->
+          {#each sortedCategories as category (category.id)}
+            <div class="report-section">
+              <div class="section-label" style="color: {category.color}">
+                <span class="label-bar" style="background-color: {category.color}"></span>
+                {category.name}
+              </div>
+              <textarea
+                class="text-area"
+                value={getFormValue(resident.id, category.id)}
+                on:input={(e) => handleTextChange(resident.id, category.id, e.currentTarget.value)}
+                placeholder="Enter notes for {category.name.toLowerCase()}..."
+              ></textarea>
+              
+              {#if category.checkboxes.length > 0}
+                <div class="checkboxes">
+                  {#each category.checkboxes as checkbox (checkbox.id)}
+                    <label 
+                      class="checkbox-item {isChecked(resident.id, category.id, checkbox.label) ? 'checked' : ''}"
+                      style="--check-color: {category.color}"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked(resident.id, category.id, checkbox.label)}
+                        on:change={() => handleCheckboxToggle(resident.id, category.id, checkbox.label)}
+                      />
+                      <span>{checkbox.label}</span>
+                    </label>
+                  {/each}
+                </div>
+              {/if}
             </div>
-            <textarea
-              class="text-area"
-              value={getFormValue(resident.id, 'positive')}
-              on:input={(e) => handleTextChange(resident.id, 'positive', e.currentTarget.value)}
-              placeholder="Document positive behaviors and accomplishments..."
-            ></textarea>
-            <div class="checkboxes">
-              {#each POSITIVE_BEHAVIORS as behavior}
-                <label class="checkbox-item {isChecked(resident.id, 'positive', behavior) ? 'checked' : ''}">
-                  <input
-                    type="checkbox"
-                    checked={isChecked(resident.id, 'positive', behavior)}
-                    on:change={() => handleCheckboxToggle(resident.id, 'positive', behavior)}
-                  />
-                  <span>{behavior}</span>
-                </label>
-              {/each}
-            </div>
-          </div>
-
-          <!-- General Notes -->
-          <div class="report-section">
-            <div class="section-label general">
-              <span class="label-bar"></span>
-              General Notes
-            </div>
-            <textarea
-              class="text-area"
-              value={getFormValue(resident.id, 'general')}
-              on:input={(e) => handleTextChange(resident.id, 'general', e.currentTarget.value)}
-              placeholder="Daily activities, meals, visitors, etc..."
-            ></textarea>
-            <div class="checkboxes">
-              {#each GENERAL_NOTES as note}
-                <label class="checkbox-item {isChecked(resident.id, 'general', note) ? 'checked' : ''}">
-                  <input
-                    type="checkbox"
-                    checked={isChecked(resident.id, 'general', note)}
-                    on:change={() => handleCheckboxToggle(resident.id, 'general', note)}
-                  />
-                  <span>{note}</span>
-                </label>
-              {/each}
-            </div>
-          </div>
-
-          <!-- Negative Behaviors -->
-          <div class="report-section">
-            <div class="section-label negative">
-              <span class="label-bar"></span>
-              Behavioral Concerns
-            </div>
-            <textarea
-              class="text-area"
-              value={getFormValue(resident.id, 'negative')}
-              on:input={(e) => handleTextChange(resident.id, 'negative', e.currentTarget.value)}
-              placeholder="Document any behavioral issues or concerns..."
-            ></textarea>
-            <div class="checkboxes">
-              {#each NEGATIVE_BEHAVIORS as behavior}
-                <label class="checkbox-item {isChecked(resident.id, 'negative', behavior) ? 'checked' : ''}">
-                  <input
-                    type="checkbox"
-                    checked={isChecked(resident.id, 'negative', behavior)}
-                    on:change={() => handleCheckboxToggle(resident.id, 'negative', behavior)}
-                  />
-                  <span>{behavior}</span>
-                </label>
-              {/each}
-            </div>
-          </div>
+          {/each}
         </div>
       {/each}
     </div>
 
     <button class="submit-btn" on:click={handleSubmit}>
-      Submit Shift Reports
+      Submit Shift Reports for {formatDate(new Date(selectedDate), { month: 'short', day: 'numeric', year: 'numeric' })}
     </button>
   {/if}
 </div>
@@ -267,6 +281,49 @@
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  .date-selection {
+    background: white;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(44, 95, 124, 0.08);
+  }
+
+  .date-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .date-label {
+    font-weight: 600;
+    color: #1a3f52;
+  }
+
+  .date-input {
+    padding: 0.5rem 1rem;
+    border: 2px solid #e1e4e8;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #1a3f52;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .date-input:focus {
+    outline: none;
+    border-color: #2c5f7c;
+    box-shadow: 0 0 0 3px rgba(44, 95, 124, 0.1);
+  }
+
+  .date-warning {
+    font-size: 0.875rem;
+    color: #d97706;
+    font-weight: 500;
   }
 
   .unit-tabs {
@@ -373,6 +430,7 @@
   .resident-badges {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
   }
 
   .badge {
@@ -382,34 +440,9 @@
     font-weight: 600;
   }
 
-  .county-badge {
+  .text-badge {
     background: #e0e7ff;
     color: #3730a3;
-  }
-
-  .level-badge {
-    min-width: 45px;
-    text-align: center;
-  }
-
-  .level-badge.level-0 {
-    background: #fee2e2;
-    color: #991b1b;
-  }
-
-  .level-badge.level-1 {
-    background: #fef3c7;
-    color: #92400e;
-  }
-
-  .level-badge.level-2 {
-    background: #d1fae5;
-    color: #065f46;
-  }
-
-  .level-badge.level-3 {
-    background: #dbeafe;
-    color: #1e40af;
   }
 
   .timestamp {
@@ -424,7 +457,6 @@
   .section-label {
     font-weight: 600;
     font-size: 0.875rem;
-    color: #1a3f52;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 0.75rem;
@@ -437,18 +469,6 @@
     width: 4px;
     height: 16px;
     border-radius: 2px;
-  }
-
-  .section-label.positive .label-bar {
-    background: #5a9e7d;
-  }
-
-  .section-label.general .label-bar {
-    background: #2c5f7c;
-  }
-
-  .section-label.negative .label-bar {
-    background: #d97847;
   }
 
   .text-area {
@@ -493,19 +513,19 @@
 
   .checkbox-item:hover {
     background: white;
-    border-color: #3d7a9e;
+    border-color: var(--check-color, #3d7a9e);
   }
 
   .checkbox-item input[type="checkbox"] {
     cursor: pointer;
     width: 18px;
     height: 18px;
-    accent-color: #2c5f7c;
+    accent-color: var(--check-color, #2c5f7c);
   }
 
   .checkbox-item.checked {
-    background: #2c5f7c;
-    border-color: #2c5f7c;
+    background: var(--check-color, #2c5f7c);
+    border-color: var(--check-color, #2c5f7c);
     color: white;
   }
 

@@ -5,22 +5,60 @@
     residentId: number;
     firstName: string;
     lastName: string;
-    county: string;
-    level: number;
+    attributes: Record<string, string>;
     unit: string;
     timestamp: string;
-    positive?: string;
-    general?: string;
-    negative?: string;
-  }>;
+    notes: Record<string, string>;
+  }> = [];
+  
+  export let residentSettings: Record<string, {
+    inheritFrom: string | null;
+    attributes: Array<{
+      id: string;
+      name: string;
+      type: 'text' | 'cycle' | 'select';
+      required: boolean;
+      options?: Array<{ value: string; label: string; color: string }>;
+      order: number;
+      showInHeader: boolean;
+    }>;
+  }> = {};
+
+  export let noteSettings: {
+    categories: Array<{
+      id: string;
+      name: string;
+      color: string;
+      order: number;
+      checkboxes: Array<{ id: string; label: string }>;
+    }>;
+  } = { categories: [] };
 
   let selectedUnit = 'All Units';
   let selectedResident = 'All Residents';
   let weekOffset = 0;
   let copySuccess = false;
 
-  $: units = ['All Units', ...new Set(reports.map(r => r.unit))];
-  $: residentOptions = ['All Residents', ...new Set(reports.map(r => `${r.firstName} ${r.lastName.charAt(0)}.`))];
+  // Safely get unique units from reports
+  function getUnits(reportList: typeof reports): string[] {
+    if (!reportList || reportList.length === 0) return ['All Units'];
+    const uniqueUnits = [...new Set(reportList.map(r => r.unit).filter(Boolean))];
+    return ['All Units', ...uniqueUnits];
+  }
+
+  // Safely get unique residents from reports
+  function getResidentOptions(reportList: typeof reports): string[] {
+    if (!reportList || reportList.length === 0) return ['All Residents'];
+    const uniqueResidents = [...new Set(reportList.map(r => {
+      if (!r.firstName || !r.lastName) return null;
+      return `${r.firstName} ${r.lastName.charAt(0)}.`;
+    }).filter(Boolean))] as string[];
+    return ['All Residents', ...uniqueResidents];
+  }
+
+  $: units = getUnits(reports);
+  $: residentOptions = getResidentOptions(reports);
+  $: sortedCategories = [...(noteSettings?.categories || [])].sort((a, b) => a.order - b.order);
 
   function getWeekDates(offset: number) {
     const now = new Date();
@@ -37,20 +75,83 @@
     return { start: monday, end: sunday };
   }
 
+  let weekDates = getWeekDates(0);
   $: weekDates = getWeekDates(weekOffset);
 
-  $: filteredReports = reports.filter(report => {
-    const reportDate = new Date(report.timestamp);
-    const matchesUnit = selectedUnit === 'All Units' || report.unit === selectedUnit;
-    const residentDisplay = `${report.firstName} ${report.lastName.charAt(0)}.`;
-    const matchesResident = selectedResident === 'All Residents' || residentDisplay === selectedResident;
-    const matchesWeek = reportDate >= weekDates.start && reportDate <= weekDates.end;
+  // Filter reports safely
+  function filterReports(
+    reportList: typeof reports, 
+    unit: string, 
+    resident: string, 
+    dates: { start: Date; end: Date }
+  ) {
+    if (!reportList || reportList.length === 0) return [];
     
-    return matchesUnit && matchesResident && matchesWeek;
-  });
+    return reportList.filter(report => {
+      if (!report || !report.timestamp) return false;
+      
+      try {
+        const reportDate = new Date(report.timestamp);
+        if (isNaN(reportDate.getTime())) return false;
+        
+        const matchesUnit = unit === 'All Units' || report.unit === unit;
+        const residentDisplay = `${report.firstName || ''} ${(report.lastName || '').charAt(0)}.`;
+        const matchesResident = resident === 'All Residents' || residentDisplay === resident;
+        const matchesWeek = reportDate >= dates.start && reportDate <= dates.end;
+        
+        return matchesUnit && matchesResident && matchesWeek;
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  $: filteredReports = filterReports(reports, selectedUnit, selectedResident, weekDates);
+
+  // Get effective attributes for a unit
+  function getEffectiveAttributes(unit: string) {
+    if (!residentSettings || !unit) return [];
+    const settings = residentSettings[unit];
+    if (!settings) return [];
+    if (settings.inheritFrom && residentSettings[settings.inheritFrom]) {
+      return residentSettings[settings.inheritFrom].attributes || [];
+    }
+    return settings.attributes || [];
+  }
+
+  function getOptionDisplay(unit: string, attrId: string, value: string) {
+    if (!unit || !attrId) return { label: value || '', color: '#6b7280' };
+    const attrs = getEffectiveAttributes(unit);
+    const attr = attrs.find(a => a.id === attrId);
+    if (!attr?.options) return { label: value || '', color: '#6b7280' };
+    const option = attr.options.find(o => o.value === value);
+    return option || { label: value || '', color: '#6b7280' };
+  }
+
+  function getCategoryById(catId: string) {
+    return noteSettings?.categories?.find(c => c.id === catId);
+  }
 
   function formatResidentHeader(report: typeof reports[0]): string {
-    return `${report.firstName} ${report.lastName.charAt(0)}. (${report.unit})(${report.county})(Lvl ${report.level})`;
+    if (!report) return '';
+    const attrs = getEffectiveAttributes(report.unit);
+    const sortedAttrs = [...attrs].sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    let header = `${report.firstName || ''} ${(report.lastName || '').charAt(0)}. (${report.unit || ''})`;
+    
+    for (const attr of sortedAttrs.filter(a => a.showInHeader)) {
+      const value = report.attributes?.[attr.id];
+      if (value) {
+        if (attr.options) {
+          const option = attr.options.find(o => o.value === value);
+          header += `(${option?.label || value})`;
+        } else {
+          header += `(${value})`;
+        }
+      }
+    }
+    
+    return header;
   }
 
   function copyToClipboard() {
@@ -60,16 +161,14 @@
     filteredReports.forEach(report => {
       text += `=================\n`;
       text += `${formatResidentHeader(report)}\n`;
-      text += `Date: ${new Date(report.timestamp).toLocaleString()}\n\n`;
+      text += `Date: ${formatDateOnly(report.timestamp)}\n\n`;
       
-      if (report.positive) {
-        text += `POSITIVE BEHAVIORS:\n${report.positive}\n\n`;
-      }
-      if (report.general) {
-        text += `GENERAL NOTES:\n${report.general}\n\n`;
-      }
-      if (report.negative) {
-        text += `BEHAVIORAL CONCERNS:\n${report.negative}\n\n`;
+      // Add each category's notes
+      for (const category of sortedCategories) {
+        const noteContent = report.notes?.[category.id];
+        if (noteContent && noteContent.trim()) {
+          text += `${category.name.toUpperCase()}:\n${noteContent}\n\n`;
+        }
       }
     });
 
@@ -79,11 +178,24 @@
   }
 
   function formatDate(date: Date, options: Intl.DateTimeFormatOptions) {
-    return date.toLocaleDateString('en-US', options);
+    try {
+      return date.toLocaleDateString('en-US', options);
+    } catch {
+      return '';
+    }
   }
 
-  function formatTimestamp(timestamp: string) {
-    return new Date(timestamp).toLocaleString();
+  function formatDateOnly(timestamp: string) {
+    try {
+      return new Date(timestamp).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch {
+      return timestamp;
+    }
   }
 </script>
 
@@ -155,39 +267,50 @@
         No reports found for the selected criteria.
       </div>
     {:else}
-      {#each filteredReports as report, idx}
+      {#each filteredReports as report (report.timestamp + '-' + report.residentId)}
+        {@const attrs = getEffectiveAttributes(report.unit)}
+        {@const sortedAttrs = [...attrs].sort((a, b) => (a.order || 0) - (b.order || 0))}
+        
         <div class="report-entry">
           <div class="report-header">
             <div class="resident-display">
-              <span class="resident-name">{report.firstName} {report.lastName.charAt(0)}.</span>
+              <span class="resident-name">{report.firstName} {(report.lastName || '').charAt(0)}.</span>
               <span class="resident-meta">
                 <span class="meta-badge unit-badge">{report.unit}</span>
-                <span class="meta-badge county-badge">{report.county}</span>
-                <span class="meta-badge level-badge level-{report.level}">Lvl {report.level}</span>
+                {#each sortedAttrs.filter(a => a.showInHeader) as attr (attr.id)}
+                  {@const value = report.attributes?.[attr.id] || ''}
+                  {#if value}
+                    {#if attr.options}
+                      {@const display = getOptionDisplay(report.unit, attr.id, value)}
+                      <span 
+                        class="meta-badge"
+                        style="background-color: {display.color}20; color: {display.color}"
+                      >
+                        {display.label}
+                      </span>
+                    {:else}
+                      <span class="meta-badge text-badge">{value}</span>
+                    {/if}
+                  {/if}
+                {/each}
               </span>
             </div>
-            <span class="report-timestamp">{formatTimestamp(report.timestamp)}</span>
+            <span class="report-date">{formatDateOnly(report.timestamp)}</span>
           </div>
           
           <div class="report-content">
-            {#if report.positive}
-              <div class="report-field">
-                <div class="report-field-label positive">Positive Behaviors</div>
-                <div class="report-field-value">{report.positive}</div>
-              </div>
-            {/if}
-            {#if report.general}
-              <div class="report-field">
-                <div class="report-field-label general">General Notes</div>
-                <div class="report-field-value">{report.general}</div>
-              </div>
-            {/if}
-            {#if report.negative}
-              <div class="report-field">
-                <div class="report-field-label negative">Behavioral Concerns</div>
-                <div class="report-field-value">{report.negative}</div>
-              </div>
-            {/if}
+            {#each sortedCategories as category (category.id)}
+              {@const noteContent = report.notes?.[category.id]}
+              {#if noteContent && noteContent.trim()}
+                <div class="report-field">
+                  <div class="report-field-label" style="color: {category.color}">
+                    <span class="label-bar" style="background-color: {category.color}"></span>
+                    {category.name}
+                  </div>
+                  <div class="report-field-value">{noteContent}</div>
+                </div>
+              {/if}
+            {/each}
           </div>
         </div>
       {/each}
@@ -293,17 +416,11 @@
 
   .week-nav-btn:hover:not(:disabled) {
     background: #3d7a9e;
-    transform: translateX(4px);
-  }
-
-  .week-nav-btn:first-child:hover:not(:disabled) {
-    transform: translateX(-4px);
   }
 
   .week-nav-btn:disabled {
     background: #e1e4e8;
     cursor: not-allowed;
-    transform: none;
   }
 
   .current-week {
@@ -329,8 +446,6 @@
 
   .copy-btn:hover {
     background: #d67e49;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(232, 146, 92, 0.3);
   }
 
   .reports-container {
@@ -397,39 +512,15 @@
     color: #374151;
   }
 
-  .county-badge {
+  .text-badge {
     background: #e0e7ff;
     color: #3730a3;
   }
 
-  .level-badge {
-    min-width: 40px;
-    text-align: center;
-  }
-
-  .level-badge.level-0 {
-    background: #fee2e2;
-    color: #991b1b;
-  }
-
-  .level-badge.level-1 {
-    background: #fef3c7;
-    color: #92400e;
-  }
-
-  .level-badge.level-2 {
-    background: #d1fae5;
-    color: #065f46;
-  }
-
-  .level-badge.level-3 {
-    background: #dbeafe;
-    color: #1e40af;
-  }
-
-  .report-timestamp {
+  .report-date {
     font-size: 0.875rem;
     color: #6b7280;
+    font-weight: 500;
   }
 
   .report-content {
@@ -452,35 +543,10 @@
     gap: 0.375rem;
   }
 
-  .report-field-label::before {
-    content: '';
+  .report-field-label .label-bar {
     width: 3px;
     height: 12px;
     border-radius: 2px;
-  }
-
-  .report-field-label.positive {
-    color: #065f46;
-  }
-
-  .report-field-label.positive::before {
-    background: #5a9e7d;
-  }
-
-  .report-field-label.general {
-    color: #1a3f52;
-  }
-
-  .report-field-label.general::before {
-    background: #2c5f7c;
-  }
-
-  .report-field-label.negative {
-    color: #92400e;
-  }
-
-  .report-field-label.negative::before {
-    background: #d97847;
   }
 
   .report-field-value {
