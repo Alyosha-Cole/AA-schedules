@@ -68,30 +68,51 @@
     formData = {
       ...formData,
       [key]: {
-        ...formData[key],
+        ...(formData[key] || {}),
         [categoryId]: value
       }
     };
+    // Don't increment formVersion here - it would cause re-render while typing
   }
 
   function handleCheckboxToggle(residentId: number, categoryId: string, text: string) {
     const key = `${activeUnit}-${residentId}`;
     const currentText = formData[key]?.[categoryId] || '';
-    const newText = currentText.includes(text)
-      ? currentText.replace(text + '. ', '')
-      : currentText + text + '. ';
+    
+    let newText: string;
+    // Check if the text (with period and space) is already in the field
+    if (currentText.includes(text + '. ')) {
+      // Remove it
+      newText = currentText.replace(text + '. ', '');
+    } else {
+      // Add it
+      newText = currentText + text + '. ';
+    }
 
-    handleTextChange(residentId, categoryId, newText);
+    // Update form data - reassigning formData triggers Svelte reactivity
+    formData = {
+      ...formData,
+      [key]: {
+        ...(formData[key] || {}),
+        [categoryId]: newText
+      }
+    };
   }
 
   function isChecked(residentId: number, categoryId: string, text: string): boolean {
     const key = `${activeUnit}-${residentId}`;
-    return formData[key]?.[categoryId]?.includes(text) || false;
+    const currentText = formData[key]?.[categoryId] || '';
+    return currentText.includes(text + '. ');
   }
 
   function getFormValue(residentId: number, categoryId: string): string {
     const key = `${activeUnit}-${residentId}`;
     return formData[key]?.[categoryId] || '';
+  }
+
+  function clearForm() {
+    // Reset form data completely - reassigning triggers Svelte reactivity
+    formData = {};
   }
 
   function handleSubmit() {
@@ -125,7 +146,8 @@
 
     if (reportsToSubmit.length > 0) {
       dispatch('submit', reportsToSubmit);
-      formData = {};
+      // Clear all form data - this will uncheck all checkboxes and clear all text fields
+      clearForm();
       showSuccess = true;
       setTimeout(() => showSuccess = false, 3000);
     }
@@ -220,7 +242,7 @@
               </div>
               <textarea
                 class="text-area"
-                value={getFormValue(resident.id, category.id)}
+                value={formData[`${activeUnit}-${resident.id}`]?.[category.id] || ''}
                 on:input={(e) => handleTextChange(resident.id, category.id, e.currentTarget.value)}
                 placeholder="Enter notes for {category.name.toLowerCase()}..."
               ></textarea>
@@ -228,13 +250,15 @@
               {#if category.checkboxes.length > 0}
                 <div class="checkboxes">
                   {#each category.checkboxes as checkbox (checkbox.id)}
+                    {@const currentText = formData[`${activeUnit}-${resident.id}`]?.[category.id] || ''}
+                    {@const checked = currentText.includes(checkbox.label + '. ')}
                     <label 
-                      class="checkbox-item {isChecked(resident.id, category.id, checkbox.label) ? 'checked' : ''}"
+                      class="checkbox-item {checked ? 'checked' : ''}"
                       style="--check-color: {category.color}"
                     >
                       <input
                         type="checkbox"
-                        checked={isChecked(resident.id, category.id, checkbox.label)}
+                        {checked}
                         on:change={() => handleCheckboxToggle(resident.id, category.id, checkbox.label)}
                       />
                       <span>{checkbox.label}</span>
