@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shift Report System</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2c5f7c;
+            --primary-light: #3d7a9e;
+            --primary-dark: #1a3f52;
+            --accent: #e8925c;
+            --success: #5a9e7d;
+            --warning: #d97847;
+            --danger: #c85555;
+            --bg-main: #f8f9fa;
+            --bg-card: #ffffff;
+            --text-primary: #1e2936;
+            --text-secondary: #6b7280;
+            --border: #e1e4e8;
+            --shadow: rgba(44, 95, 124, 0.08);
+        }
+
+        body {
+            font-family: 'Work Sans', sans-serif;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 2rem 2.5rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 24px var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            transform: translate(30%, -30%);
+        }
+
+        .header h1 {
+            font-family: 'Crimson Pro', serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            position: relative;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1rem;
+            position: relative;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-btn {
+            flex: 1;
+            padding: 1rem 2rem;
+            border: 2px solid var(--primary);
+            background: var(--bg-card);
+            color: var(--primary);
+            font-family: 'Work Sans', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            transition: left 0.3s ease;
+            z-index: 0;
+        }
+
+        .nav-btn span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .nav-btn:hover::before {
+            left: 0;
+        }
+
+        .nav-btn:hover span {
+            color: white;
+        }
+
+        .nav-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .nav-btn.active::before {
+            left: 0;
+        }
+
+        .unit-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            background: var(--bg-card);
+            padding: 0.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .unit-tab {
+            flex: 1;
+            padding: 0.875rem 1.5rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: 'Work Sans', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.3px;
+        }
+
+        .unit-tab:hover {
+            background: var(--bg-main);
+            color: var(--text-primary);
+        }
+
+        .unit-tab.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 8px rgba(44, 95, 124, 0.2);
+        }
+
+        .residents-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .resident-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 16px var(--shadow);
+            transition: all 0.3s ease;
+            border: 1px solid var(--border);
+        }
+
+        .resident-card:hover {
+            box-shadow: 0 8px 24px var(--shadow);
+            transform: translateY(-2px);
+        }
+
+        .resident-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .resident-name {
+            font-family: 'Crimson Pro', serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+
+        .timestamp {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .report-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--primary-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-label::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            border-radius: 2px;
+        }
+
+        .section-label.positive::before {
+            background: var(--success);
+        }
+
+        .section-label.general::before {
+            background: var(--primary);
+        }
+
+        .section-label.negative::before {
+            background: var(--warning);
+        }
+
+        .text-area {
+            width: 100%;
+            min-height: 100px;
+            padding: 1rem;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-family: 'Work Sans', sans-serif;
+            font-size: 0.95rem;
+            resize: vertical;
+            transition: all 0.3s ease;
+            background: var(--bg-main);
+        }
+
+        .text-area:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(44, 95, 124, 0.1);
+        }
+
+        .checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.875rem;
+            background: var(--bg-main);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+
+        .checkbox-item:hover {
+            background: white;
+            border-color: var(--primary-light);
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+        }
+
+        .checkbox-item.checked {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, var(--success) 0%, #4a8d6a 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Work Sans', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 2rem;
+            box-shadow: 0 4px 12px rgba(90, 158, 125, 0.3);
+            letter-spacing: 0.3px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(90, 158, 125, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .filters {
+            background: var(--bg-card);
+            padding: 2rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--primary-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-select {
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-family: 'Work Sans', sans-serif;
+            font-size: 0.95rem;
+            background: var(--bg-main);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: white;
+        }
+
+        .week-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .week-nav-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Work Sans', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .week-nav-btn:hover {
+            background: var(--primary-light);
+            transform: translateX(4px);
+        }
+
+        .week-nav-btn:first-child:hover {
+            transform: translateX(-4px);
+        }
+
+        .week-nav-btn:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .current-week {
+            font-family: 'Crimson Pro', serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-dark);
+        }
+
+        .reports-container {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+
+        .report-entry {
+            border-left: 4px solid var(--primary);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: var(--bg-main);
+            border-radius: 0 12px 12px 0;
+            transition: all 0.3s ease;
+        }
+
+        .report-entry:hover {
+            background: white;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .report-date {
+            font-weight: 600;
+            color: var(--primary-dark);
+            margin-bottom: 1rem;
+            font-family: 'Crimson Pro', serif;
+            font-size: 1.1rem;
+        }
+
+        .report-content {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .report-field {
+            display: grid;
+            gap: 0.25rem;
+        }
+
+        .report-field-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .report-field-value {
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .copy-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Work Sans', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .copy-btn:hover {
+            background: #d67e49;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(232, 146, 92, 0.3);
+        }
+
+        .no-reports {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .success-message {
+            background: var(--success);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            font-weight: 500;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const POSITIVE_BEHAVIORS = [
+            'Participated in group activities',
+            'Showed respect to staff',
+            'Helped another resident',
+            'Completed assigned tasks',
+            'Displayed positive attitude'
+        ];
+
+        const GENERAL_NOTES = [
+            'Ate all meals',
+            'Attended classes',
+            'Participated in recreation',
+            'Took medications',
+            'Had visitor'
+        ];
+
+        const NEGATIVE_BEHAVIORS = [
+            'Refused to follow directions',
+            'Verbal altercation with peer',
+            'Disruptive in class',
+            'Property damage',
+            'Left designated area without permission'
+        ];
+
+        function ShiftReportPage({ reports, onSubmit }) {
+            const [activeUnit, setActiveUnit] = useState('Unit 1');
+            const [formData, setFormData] = useState({});
+
+            const residents = {
+                'Unit 1': ['Resident 1', 'Resident 2', 'Resident 3'],
+                'Unit 2': ['Resident 4', 'Resident 5', 'Resident 6'],
+                'Unit 3': ['Resident 7', 'Resident 8', 'Resident 9']
+            };
+
+            const handleTextChange = (resident, section, value) => {
+                setFormData(prev => ({
+                    ...prev,
+                    [resident]: {
+                        ...prev[resident],
+                        [section]: value
+                    }
+                }));
+            };
+
+            const handleCheckboxToggle = (resident, section, text) => {
+                const currentText = formData[resident]?.[section] || '';
+                const newText = currentText.includes(text)
+                    ? currentText.replace(text + '. ', '')
+                    : currentText + text + '. ';
+
+                handleTextChange(resident, section, newText);
+            };
+
+            const handleSubmit = () => {
+                const reportsToSubmit = [];
+                const timestamp = new Date().toISOString();
+
+                Object.entries(formData).forEach(([resident, data]) => {
+                    if (data.positive || data.general || data.negative) {
+                        reportsToSubmit.push({
+                            resident,
+                            unit: activeUnit,
+                            timestamp,
+                            ...data
+                        });
+                    }
+                });
+
+                if (reportsToSubmit.length > 0) {
+                    onSubmit(reportsToSubmit);
+                    setFormData({});
+                }
+            };
+
+            return (
+                <div>
+                    <div className="unit-tabs">
+                        {['Unit 1', 'Unit 2', 'Unit 3'].map(unit => (
+                            <button
+                                key={unit}
+                                className={`unit-tab ${activeUnit === unit ? 'active' : ''}`}
+                                onClick={() => setActiveUnit(unit)}
+                            >
+                                {unit}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="residents-grid">
+                        {residents[activeUnit].map(resident => (
+                            <div key={resident} className="resident-card">
+                                <div className="resident-header">
+                                    <h2 className="resident-name">{resident}</h2>
+                                    <span className="timestamp">
+                                        {new Date().toLocaleDateString('en-US', { 
+                                            weekday: 'short', 
+                                            month: 'short', 
+                                            day: 'numeric' 
+                                        })}
+                                    </span>
+                                </div>
+
+                                <div className="report-section">
+                                    <div className="section-label positive">Positive Behaviors</div>
+                                    <textarea
+                                        className="text-area"
+                                        value={formData[resident]?.positive || ''}
+                                        onChange={(e) => handleTextChange(resident, 'positive', e.target.value)}
+                                        placeholder="Document positive behaviors and accomplishments..."
+                                    />
+                                    <div className="checkboxes">
+                                        {POSITIVE_BEHAVIORS.map(behavior => {
+                                            const isChecked = formData[resident]?.positive?.includes(behavior) || false;
+                                            return (
+                                                <label 
+                                                    key={behavior} 
+                                                    className={`checkbox-item ${isChecked ? 'checked' : ''}`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => handleCheckboxToggle(resident, 'positive', behavior)}
+                                                    />
+                                                    <span>{behavior}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="report-section">
+                                    <div className="section-label general">General Notes</div>
+                                    <textarea
+                                        className="text-area"
+                                        value={formData[resident]?.general || ''}
+                                        onChange={(e) => handleTextChange(resident, 'general', e.target.value)}
+                                        placeholder="Daily activities, meals, visitors, etc..."
+                                    />
+                                    <div className="checkboxes">
+                                        {GENERAL_NOTES.map(note => {
+                                            const isChecked = formData[resident]?.general?.includes(note) || false;
+                                            return (
+                                                <label 
+                                                    key={note} 
+                                                    className={`checkbox-item ${isChecked ? 'checked' : ''}`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => handleCheckboxToggle(resident, 'general', note)}
+                                                    />
+                                                    <span>{note}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="report-section">
+                                    <div className="section-label negative">Behavioral Concerns</div>
+                                    <textarea
+                                        className="text-area"
+                                        value={formData[resident]?.negative || ''}
+                                        onChange={(e) => handleTextChange(resident, 'negative', e.target.value)}
+                                        placeholder="Document any behavioral issues or concerns..."
+                                    />
+                                    <div className="checkboxes">
+                                        {NEGATIVE_BEHAVIORS.map(behavior => {
+                                            const isChecked = formData[resident]?.negative?.includes(behavior) || false;
+                                            return (
+                                                <label 
+                                                    key={behavior} 
+                                                    className={`checkbox-item ${isChecked ? 'checked' : ''}`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => handleCheckboxToggle(resident, 'negative', behavior)}
+                                                    />
+                                                    <span>{behavior}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button className="submit-btn" onClick={handleSubmit}>
+                        Submit Shift Reports
+                    </button>
+                </div>
+            );
+        }
+
+        function ViewReportsPage({ reports }) {
+            const [selectedUnit, setSelectedUnit] = useState('All Units');
+            const [selectedResident, setSelectedResident] = useState('All Residents');
+            const [weekOffset, setWeekOffset] = useState(0);
+            const [showSuccess, setShowSuccess] = useState(false);
+
+            const getWeekDates = (offset) => {
+                const now = new Date();
+                const currentDay = now.getDay();
+                const diff = now.getDate() - currentDay + (currentDay === 0 ? -6 : 1);
+                const monday = new Date(now.setDate(diff));
+                monday.setDate(monday.getDate() + (offset * 7));
+                
+                const sunday = new Date(monday);
+                sunday.setDate(sunday.getDate() + 6);
+                
+                return { start: monday, end: sunday };
+            };
+
+            const { start: weekStart, end: weekEnd } = getWeekDates(weekOffset);
+
+            const filteredReports = reports.filter(report => {
+                const reportDate = new Date(report.timestamp);
+                const matchesUnit = selectedUnit === 'All Units' || report.unit === selectedUnit;
+                const matchesResident = selectedResident === 'All Residents' || report.resident === selectedResident;
+                const matchesWeek = reportDate >= weekStart && reportDate <= weekEnd;
+                
+                return matchesUnit && matchesResident && matchesWeek;
+            });
+
+            const units = ['All Units', ...new Set(reports.map(r => r.unit))];
+            const residents = ['All Residents', ...new Set(reports.map(r => r.resident))];
+
+            const copyToClipboard = () => {
+                let text = `SHIFT REPORTS\n`;
+                text += `Week of ${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}\n\n`;
+
+                filteredReports.forEach(report => {
+                    text += `=================\n`;
+                    text += `${report.resident} (${report.unit})\n`;
+                    text += `Date: ${new Date(report.timestamp).toLocaleString()}\n\n`;
+                    
+                    if (report.positive) {
+                        text += `POSITIVE BEHAVIORS:\n${report.positive}\n\n`;
+                    }
+                    if (report.general) {
+                        text += `GENERAL NOTES:\n${report.general}\n\n`;
+                    }
+                    if (report.negative) {
+                        text += `BEHAVIORAL CONCERNS:\n${report.negative}\n\n`;
+                    }
+                });
+
+                navigator.clipboard.writeText(text);
+                setShowSuccess(true);
+                setTimeout(() => setShowSuccess(false), 3000);
+            };
+
+            return (
+                <div>
+                    {showSuccess && (
+                        <div className="success-message">
+                            ✓ Reports copied to clipboard successfully!
+                        </div>
+                    )}
+
+                    <div className="filters">
+                        <div className="filters-grid">
+                            <div className="filter-group">
+                                <label className="filter-label">Unit</label>
+                                <select 
+                                    className="filter-select"
+                                    value={selectedUnit}
+                                    onChange={(e) => setSelectedUnit(e.target.value)}
+                                >
+                                    {units.map(unit => (
+                                        <option key={unit} value={unit}>{unit}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="filter-group">
+                                <label className="filter-label">Resident</label>
+                                <select 
+                                    className="filter-select"
+                                    value={selectedResident}
+                                    onChange={(e) => setSelectedResident(e.target.value)}
+                                >
+                                    {residents.map(resident => (
+                                        <option key={resident} value={resident}>{resident}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="week-navigation">
+                        <button 
+                            className="week-nav-btn"
+                            onClick={() => setWeekOffset(weekOffset - 1)}
+                        >
+                            ← Previous Week
+                        </button>
+                        <div className="current-week">
+                            {weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+                        <button 
+                            className="week-nav-btn"
+                            onClick={() => setWeekOffset(weekOffset + 1)}
+                            disabled={weekOffset >= 0}
+                        >
+                            Next Week →
+                        </button>
+                    </div>
+
+                    {filteredReports.length > 0 && (
+                        <button className="copy-btn" onClick={copyToClipboard}>
+                            📋 Copy All Reports for This Week
+                        </button>
+                    )}
+
+                    <div className="reports-container">
+                        {filteredReports.length === 0 ? (
+                            <div className="no-reports">
+                                No reports found for the selected criteria.
+                            </div>
+                        ) : (
+                            filteredReports.map((report, idx) => (
+                                <div key={idx} className="report-entry">
+                                    <div className="report-date">
+                                        {report.resident} ({report.unit}) - {new Date(report.timestamp).toLocaleString()}
+                                    </div>
+                                    <div className="report-content">
+                                        {report.positive && (
+                                            <div className="report-field">
+                                                <div className="report-field-label">Positive Behaviors</div>
+                                                <div className="report-field-value">{report.positive}</div>
+                                            </div>
+                                        )}
+                                        {report.general && (
+                                            <div className="report-field">
+                                                <div className="report-field-label">General Notes</div>
+                                                <div className="report-field-value">{report.general}</div>
+                                            </div>
+                                        )}
+                                        {report.negative && (
+                                            <div className="report-field">
+                                                <div className="report-field-label">Behavioral Concerns</div>
+                                                <div className="report-field-value">{report.negative}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [currentView, setCurrentView] = useState('entry');
+            const [reports, setReports] = useState([]);
+            const [showSuccess, setShowSuccess] = useState(false);
+
+            const handleSubmitReports = (newReports) => {
+                setReports(prev => [...prev, ...newReports]);
+                setShowSuccess(true);
+                setTimeout(() => setShowSuccess(false), 3000);
+            };
+
+            return (
+                <div className="app-container">
+                    <div className="header">
+                        <h1>Shift Report System</h1>
+                        <p>Document resident activities and behaviors for probation reporting</p>
+                    </div>
+
+                    {showSuccess && currentView === 'entry' && (
+                        <div className="success-message">
+                            ✓ Shift reports submitted successfully!
+                        </div>
+                    )}
+
+                    <div className="nav-buttons">
+                        <button 
+                            className={`nav-btn ${currentView === 'entry' ? 'active' : ''}`}
+                            onClick={() => setCurrentView('entry')}
+                        >
+                            <span>📝 Create Shift Reports</span>
+                        </button>
+                        <button 
+                            className={`nav-btn ${currentView === 'view' ? 'active' : ''}`}
+                            onClick={() => setCurrentView('view')}
+                        >
+                            <span>📊 View Reports</span>
+                        </button>
+                    </div>
+
+                    {currentView === 'entry' ? (
+                        <ShiftReportPage reports={reports} onSubmit={handleSubmitReports} />
+                    ) : (
+                        <ViewReportsPage reports={reports} />
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

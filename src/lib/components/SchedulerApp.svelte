@@ -8,7 +8,8 @@
   import ScheduleDetail from './ScheduleDetail.svelte';
   import MasterSchedule from './MasterSchedule.svelte';
   import PrintableSheets from './PrintableSheets.svelte';
-  import { Calendar, Users, FileText } from 'lucide-svelte';
+  import Notes from './Notes.svelte';
+  import { Calendar, Users, FileText, ClipboardList } from 'lucide-svelte';
 
   export let startDate: Date;
   export let saveStatus: string;
@@ -34,8 +35,8 @@
   // Track the active schedule tab
   let activeScheduleId: number | null = null;
 
-  // Track the active main tab (schedules, master-schedule, or printable-sheets)
-  let activeTab: 'schedules' | 'master-schedule' | 'printable-sheets' = 'schedules';
+  // Track the active main tab (schedules, master-schedule, printable-sheets, or notes)
+  let activeTab: 'schedules' | 'master-schedule' | 'printable-sheets' | 'notes' = 'schedules';
 
   // Set the first schedule as active when schedules change
   $: if (schedules.length > 0 && (activeScheduleId === null || !schedules.find(s => s.id === activeScheduleId))) {
@@ -97,6 +98,13 @@
           >
             <FileText class="w-5 h-5" />
             Printable Sheets
+          </button>
+          <button
+            on:click={() => activeTab = 'notes'}
+            class="flex items-center gap-2 px-6 py-4 font-medium transition-colors relative {activeTab === 'notes' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}"
+          >
+            <ClipboardList class="w-5 h-5" />
+            Notes
           </button>
         </div>
       </div>
@@ -183,6 +191,11 @@
     <!-- Printable Sheets View -->
     {#if activeTab === 'printable-sheets'}
       <PrintableSheets />
+    {/if}
+
+    <!-- Notes View -->
+    {#if activeTab === 'notes'}
+      <Notes />
     {/if}
 
     <input
