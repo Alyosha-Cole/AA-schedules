@@ -581,9 +581,24 @@ function createDefaultSchedules() {
     positionAssignments[position.id] = mergedAssignments;
 
     // Keep any existing custom order if present, otherwise default to staff order
-    positionDisplayOrders[position.id] =
-      schedule.positionDisplayOrders?.[position.id] ||
-      position.people.map((p) => p.id);
+    // IMPORTANT: Also ensure any NEW staff members are added to the display order
+    const existingOrder = schedule.positionDisplayOrders?.[position.id] || [];
+    const allStaffIds = position.people.map((p) => p.id);
+    
+    // Start with the existing order (preserves custom ordering for existing staff + sim staff)
+    // Filter out any staff IDs that no longer exist (deleted staff)
+    const validExistingOrder = existingOrder.filter(id => 
+      allStaffIds.includes(id) || (typeof id === 'string' && id.startsWith('sim-'))
+    );
+    
+    // Add any staff members that aren't already in the order (new staff)
+    for (const staffId of allStaffIds) {
+      if (!validExistingOrder.includes(staffId)) {
+        validExistingOrder.push(staffId);
+      }
+    }
+    
+    positionDisplayOrders[position.id] = validExistingOrder.length > 0 ? validExistingOrder : allStaffIds;
 
     positionSimStaff[position.id] =
       schedule.positionSimStaff?.[position.id] || [];
