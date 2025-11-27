@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import { X, Plus, Trash2, GripVertical, Settings, Users, FileText } from 'lucide-svelte';
+  import { X, Plus, Trash2, GripVertical, Settings, Users, FileText, Building2 } from 'lucide-svelte';
 
   export let units: string[];
   export let residentSettings: Record<string, {
@@ -29,7 +29,7 @@
   const dispatch = createEventDispatcher();
 
   // Tabs
-  let activeTab: 'residents' | 'notes' = 'residents';
+  let activeTab: 'units' | 'residents' | 'notes' = 'units';
 
   // Professional color palette
   const COLOR_PALETTE = [
@@ -54,10 +54,17 @@
   let draggedCategory: string | null = null;
   let dragOverCategoryId: string | null = null;
 
+  // For unit drag
+  let draggedUnitIndex: number | null = null;
+  let dragOverUnitIndex: number | null = null;
+
   // For editing
   let editingAttribute: string | null = null;
   let newOptionLabel = '';
   let newCheckboxLabel = '';
+  let newUnitName = '';
+  let editingUnitIndex: number | null = null;
+  let editingUnitName = '';
 
   // Get default attributes
   function getDefaultAttributes() {
@@ -139,6 +146,10 @@
     dispatch('noteSettingsChanged', noteSettings);
   }
 
+  function saveUnits() {
+    dispatch('unitsChanged', units);
+  }
+
   function handleInheritChange(e: Event) {
     const value = (e.target as HTMLSelectElement).value;
     if (currentSettings && selectedUnit) {
@@ -149,6 +160,149 @@
       };
       saveResidentSettings();
     }
+  }
+
+  // =====================
+  // Unit Management Functions
+  // =====================
+
+  function addUnit() {
+    if (!newUnitName.trim()) return;
+    
+    const unitName = newUnitName.trim();
+    if (units.includes(unitName)) {
+      alert('A unit with this name already exists');
+      return;
+    }
+    
+    units = [...units, unitName];
+    
+    // Initialize settings for new unit
+    residentSettings[unitName] = {
+      inheritFrom: null,
+      attributes: getDefaultAttributes()
+    };
+    
+    newUnitName = '';
+    saveUnits();
+    saveResidentSettings();
+  }
+
+  function deleteUnit(index: number) {
+    if (units.length <= 1) {
+      alert('You must have at least one unit');
+      return;
+    }
+    
+    const unitName = units[index];
+    if (!confirm(`Delete "${unitName}"? This will remove all residents and settings for this unit.`)) {
+      return;
+    }
+    
+    // Remove from units array
+    units = units.filter((_, i) => i !== index);
+    
+    // Remove settings
+    delete residentSettings[unitName];
+    
+    // Update any units that inherited from this one
+    for (const key of Object.keys(residentSettings)) {
+      if (residentSettings[key].inheritFrom === unitName) {
+        residentSettings[key].inheritFrom = null;
+      }
+    }
+    
+    // Update selected unit if needed
+    if (selectedUnit === unitName) {
+      selectedUnit = units[0] || null;
+    }
+    
+    saveUnits();
+    saveResidentSettings();
+  }
+
+  function startEditingUnit(index: number) {
+    editingUnitIndex = index;
+    editingUnitName = units[index];
+  }
+
+  function saveUnitName(index: number) {
+    const newName = editingUnitName.trim();
+    const oldName = units[index];
+    
+    if (!newName) {
+      editingUnitIndex = null;
+      return;
+    }
+    
+    if (newName !== oldName && units.includes(newName)) {
+      alert('A unit with this name already exists');
+      return;
+    }
+    
+    if (newName !== oldName) {
+      // Update units array
+      units = units.map((u, i) => i === index ? newName : u);
+      
+      // Transfer settings to new name
+      residentSettings[newName] = residentSettings[oldName];
+      delete residentSettings[oldName];
+      
+      // Update any units that inherited from this one
+      for (const key of Object.keys(residentSettings)) {
+        if (residentSettings[key].inheritFrom === oldName) {
+          residentSettings[key].inheritFrom = newName;
+        }
+      }
+      
+      // Update selected unit if needed
+      if (selectedUnit === oldName) {
+        selectedUnit = newName;
+      }
+      
+      saveUnits();
+      saveResidentSettings();
+    }
+    
+    editingUnitIndex = null;
+  }
+
+  function onUnitDragStart(index: number, e: DragEvent) {
+    draggedUnitIndex = index;
+    e.dataTransfer!.effectAllowed = 'move';
+  }
+
+  function onUnitDragOver(index: number, e: DragEvent) {
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+    dragOverUnitIndex = index;
+  }
+
+  function onUnitDragLeave() {
+    dragOverUnitIndex = null;
+  }
+
+  function onUnitDrop(targetIndex: number, e: DragEvent) {
+    e.preventDefault();
+    dragOverUnitIndex = null;
+    
+    if (draggedUnitIndex === null || draggedUnitIndex === targetIndex) {
+      draggedUnitIndex = null;
+      return;
+    }
+    
+    const reordered = [...units];
+    const [movedItem] = reordered.splice(draggedUnitIndex, 1);
+    reordered.splice(targetIndex, 0, movedItem);
+    
+    units = reordered;
+    saveUnits();
+    draggedUnitIndex = null;
+  }
+
+  function onUnitDragEnd() {
+    dragOverUnitIndex = null;
+    draggedUnitIndex = null;
   }
 
   // =====================
@@ -569,6 +723,13 @@
     <!-- Tabs -->
     <div class="flex border-b border-slate-200">
       <button
+        class="flex items-center gap-2 px-6 py-3 font-medium transition-colors {activeTab === 'units' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-800'}"
+        on:click={() => activeTab = 'units'}
+      >
+        <Building2 class="w-4 h-4" />
+        Units
+      </button>
+      <button
         class="flex items-center gap-2 px-6 py-3 font-medium transition-colors {activeTab === 'residents' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-800'}"
         on:click={() => activeTab = 'residents'}
       >
@@ -587,6 +748,107 @@
     <!-- Content -->
     <div class="flex-1 overflow-y-auto p-6">
       
+      <!-- UNITS TAB -->
+      {#if activeTab === 'units'}
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold text-slate-800">Manage Units</h3>
+          </div>
+
+          <p class="text-sm text-slate-600 mb-4">
+            Add, rename, reorder, or remove units. Drag to reorder.
+          </p>
+
+          <!-- Add Unit -->
+          <div class="flex items-center gap-2 mb-6 p-4 bg-slate-50 rounded-lg">
+            <input
+              type="text"
+              bind:value={newUnitName}
+              placeholder="New unit name (e.g., Unit 4, East Wing)"
+              on:keydown={(e) => e.key === 'Enter' && addUnit()}
+              class="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <button
+              on:click={addUnit}
+              class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Plus class="w-4 h-4" />
+              Add Unit
+            </button>
+          </div>
+
+          <!-- Unit List -->
+          <div class="space-y-2">
+            {#each units as unit, index (unit)}
+              {@const isDragging = draggedUnitIndex === index}
+              <div
+                class="flex items-center gap-3 p-3 bg-white border border-slate-300 rounded-lg transition-all {dragOverUnitIndex === index ? 'border-blue-500 bg-blue-50' : ''} {isDragging ? 'opacity-50' : ''}"
+                draggable={true}
+                on:dragstart={(e) => onUnitDragStart(index, e)}
+                on:dragover={(e) => onUnitDragOver(index, e)}
+                on:dragleave={onUnitDragLeave}
+                on:drop={(e) => onUnitDrop(index, e)}
+                on:dragend={onUnitDragEnd}
+              >
+                <div class="cursor-move text-slate-400 hover:text-slate-600">
+                  <GripVertical class="w-5 h-5" />
+                </div>
+
+                {#if editingUnitIndex === index}
+                  <input
+                    type="text"
+                    bind:value={editingUnitName}
+                    on:blur={() => saveUnitName(index)}
+                    on:keydown={(e) => {
+                      if (e.key === 'Enter') saveUnitName(index);
+                      if (e.key === 'Escape') editingUnitIndex = null;
+                    }}
+                    class="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autofocus
+                  />
+                {:else}
+                  <div 
+                    class="flex-1 px-3 py-2 font-medium text-slate-800 cursor-pointer hover:bg-slate-50 rounded"
+                    on:dblclick={() => startEditingUnit(index)}
+                  >
+                    {unit}
+                  </div>
+                {/if}
+
+                <span class="text-xs text-slate-500">
+                  Double-click to rename
+                </span>
+
+                <button
+                  on:click={() => deleteUnit(index)}
+                  class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Delete unit"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+              </div>
+            {/each}
+          </div>
+
+          {#if units.length === 0}
+            <div class="text-center py-8 text-slate-500">
+              No units defined. Add at least one unit to get started.
+            </div>
+          {/if}
+
+          <!-- Info Box -->
+          <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 class="text-sm font-semibold text-blue-900 mb-2">Tips:</h4>
+            <ul class="text-xs text-blue-800 space-y-1">
+              <li>• Double-click a unit name to rename it</li>
+              <li>• Drag units to reorder them</li>
+              <li>• Deleting a unit removes all its residents</li>
+              <li>• Unit order affects how they appear in tabs</li>
+            </ul>
+          </div>
+        </div>
+      {/if}
+
       <!-- RESIDENT ATTRIBUTES TAB -->
       {#if activeTab === 'residents'}
         <!-- Unit Selector -->

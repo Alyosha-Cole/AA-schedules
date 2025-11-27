@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Check, Calendar } from 'lucide-svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { Check, Calendar, ChevronLeft, ChevronRight } from 'lucide-svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
 
   export let residents: Record<string, Array<{
     id: number;
@@ -34,15 +34,33 @@
 
   const dispatch = createEventDispatcher();
 
-  let activeUnit = Object.keys(residents)[0] || 'Unit 1';
+  let activeUnit = Object.keys(residents)[0] || '';
   let formData: Record<string, Record<string, string>> = {};
   let showSuccess = false;
   
   // Date selection - defaults to today
   let selectedDate = new Date().toISOString().split('T')[0];
 
+  // Tab scrolling
+  let tabContainer: HTMLElement;
+  let showLeftArrow = false;
+  let showRightArrow = false;
+
+  onMount(() => {
+    setTimeout(checkScrollArrows, 100);
+  });
+
+  $: unitList = Object.keys(residents);
+  $: if (unitList.length > 0 && !unitList.includes(activeUnit)) {
+    activeUnit = unitList[0];
+  }
   $: unitResidents = residents[activeUnit] || [];
   $: sortedCategories = [...(noteSettings?.categories || [])].sort((a, b) => a.order - b.order);
+  
+  // Re-check scroll arrows when units change
+  $: if (unitList) {
+    setTimeout(checkScrollArrows, 100);
+  }
   
   // Get effective attributes for the active unit
   $: effectiveAttributes = (() => {
@@ -156,6 +174,23 @@
   function formatDate(date: Date, options: Intl.DateTimeFormatOptions) {
     return date.toLocaleDateString('en-US', options);
   }
+
+  // Tab scrolling functions
+  function checkScrollArrows() {
+    if (!tabContainer) return;
+    showLeftArrow = tabContainer.scrollLeft > 0;
+    showRightArrow = tabContainer.scrollLeft < tabContainer.scrollWidth - tabContainer.clientWidth - 5;
+  }
+
+  function scrollTabs(direction: 'left' | 'right') {
+    if (!tabContainer) return;
+    const scrollAmount = 200;
+    tabContainer.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth'
+    });
+    setTimeout(checkScrollArrows, 300);
+  }
 </script>
 
 <div class="notes-form">
@@ -182,16 +217,34 @@
     </div>
   </div>
 
-  <div class="unit-tabs">
-    {#each Object.keys(residents) as unit}
-      <button
-        class="unit-tab {activeUnit === unit ? 'active' : ''}"
-        on:click={() => activeUnit = unit}
-      >
-        {unit}
-        <span class="tab-count">({residents[unit]?.length || 0})</span>
+  <div class="unit-tabs-wrapper">
+    {#if showLeftArrow}
+      <button class="scroll-arrow left" on:click={() => scrollTabs('left')}>
+        <ChevronLeft class="w-5 h-5" />
       </button>
-    {/each}
+    {/if}
+    
+    <div 
+      class="unit-tabs"
+      bind:this={tabContainer}
+      on:scroll={checkScrollArrows}
+    >
+      {#each unitList as unit (unit)}
+        <button
+          class="unit-tab {activeUnit === unit ? 'active' : ''}"
+          on:click={() => activeUnit = unit}
+        >
+          {unit}
+          <span class="tab-count">({residents[unit]?.length || 0})</span>
+        </button>
+      {/each}
+    </div>
+    
+    {#if showRightArrow}
+      <button class="scroll-arrow right" on:click={() => scrollTabs('right')}>
+        <ChevronRight class="w-5 h-5" />
+      </button>
+    {/if}
   </div>
 
   {#if sortedCategories.length === 0}
@@ -350,18 +403,54 @@
     font-weight: 500;
   }
 
-  .unit-tabs {
+  .unit-tabs-wrapper {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
     margin-bottom: 2rem;
     background: white;
     padding: 0.5rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(44, 95, 124, 0.08);
+    position: relative;
+  }
+
+  .scroll-arrow {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #475569;
+    transition: all 0.2s ease;
+  }
+
+  .scroll-arrow:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+  }
+
+  .unit-tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex: 1;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .unit-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .unit-tab {
-    flex: 1;
+    flex-shrink: 0;
     padding: 0.875rem 1.5rem;
     border: none;
     background: transparent;
@@ -375,6 +464,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    white-space: nowrap;
   }
 
   .unit-tab:hover {

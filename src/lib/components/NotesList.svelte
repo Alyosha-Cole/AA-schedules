@@ -8,7 +8,7 @@
     firstName: string;
     lastName: string;
     attributes: Record<string, string>;
-  }>;
+  }> = [];
   export let attributeSettings: Array<{
     id: string;
     name: string;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, ChevronRight, Settings } from 'lucide-svelte';
+  import { ChevronDown, ChevronRight, Settings, ChevronLeft, Plus } from 'lucide-svelte';
   import NotesList from './NotesList.svelte';
   import NotesForm from './NotesForm.svelte';
   import ViewNotes from './ViewNotes.svelte';
@@ -10,8 +10,8 @@
   let showResidentManagement = true;
   let showAdvancedSettings = false;
 
-  // Unit names
-  const unitNames = ['Unit 1', 'Unit 2', 'Unit 3'];
+  // Unit names - now dynamic
+  let unitNames = ['Unit 1', 'Unit 2', 'Unit 3'];
 
   // Default attribute settings
   function getDefaultAttributes() {
@@ -101,11 +101,24 @@
   }> = {};
 
   // Initialize settings for each unit
-  for (const unit of unitNames) {
-    residentSettings[unit] = {
-      inheritFrom: null,
-      attributes: getDefaultAttributes()
-    };
+  function initializeUnitSettings() {
+    for (const unit of unitNames) {
+      if (!residentSettings[unit]) {
+        residentSettings[unit] = {
+          inheritFrom: null,
+          attributes: getDefaultAttributes()
+        };
+      }
+    }
+    // Initialize residents too
+    for (const unit of unitNames) {
+      if (!residents[unit]) {
+        residents[unit] = [];
+      }
+      if (!idCounters[unit]) {
+        idCounters[unit] = 0;
+      }
+    }
   }
 
   // Note settings (categories and checkboxes)
@@ -129,11 +142,6 @@
     attributes: Record<string, string>;
   }>> = {};
 
-  // Initialize residents for each unit
-  for (const unit of unitNames) {
-    residents[unit] = [];
-  }
-
   // Reports
   let reports: Array<{
     residentId: number;
@@ -147,9 +155,9 @@
 
   // ID counters per unit
   let idCounters: Record<string, number> = {};
-  for (const unit of unitNames) {
-    idCounters[unit] = 0;
-  }
+
+  // Initialize on load
+  initializeUnitSettings();
 
   // Get effective attributes for a unit
   function getEffectiveAttributes(unit: string) {
@@ -204,6 +212,28 @@
 
   function handleNoteSettingsChanged(event: CustomEvent<typeof noteSettings>) {
     noteSettings = event.detail;
+  }
+
+  function handleUnitsChanged(event: CustomEvent<string[]>) {
+    const oldUnits = unitNames;
+    const newUnits = event.detail;
+    
+    unitNames = newUnits;
+    
+    // Clean up residents for deleted units
+    for (const unit of oldUnits) {
+      if (!newUnits.includes(unit)) {
+        delete residents[unit];
+        delete idCounters[unit];
+      }
+    }
+    
+    // Initialize new units
+    initializeUnitSettings();
+    
+    // Force reactivity
+    residents = { ...residents };
+    residentSettings = { ...residentSettings };
   }
 </script>
 
@@ -302,6 +332,7 @@
       on:close={() => showAdvancedSettings = false}
       on:residentSettingsChanged={handleResidentSettingsChanged}
       on:noteSettingsChanged={handleNoteSettingsChanged}
+      on:unitsChanged={handleUnitsChanged}
     />
   {/if}
 </div>
